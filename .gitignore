@@ -1,9 +1,22 @@
 .github
 .idea
-/target
+.vscode
 
-# Frontend
+#Backend 
+backend/target/
+*.class
+*.jar
+*.war
+*.log
+
+#Frontend
 frontend/node_modules
 frontend/dist
 frontend/.env
 frontend/.env.local
+frontend/.env.*.local
+node_modules/
+
+#File di sistema
+.DS_Store
+Thumbs.db
