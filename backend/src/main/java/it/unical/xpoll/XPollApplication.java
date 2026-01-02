@@ -8,5 +8,4 @@ public class XPollApplication {
     public static void main(String[] args) {
         SpringApplication.run(XPollApplication.class, args);
     }
-
 }
