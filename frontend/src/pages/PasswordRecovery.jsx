@@ -1,19 +1,27 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { requestPasswordReset } from '../services/ResetPasswordService'
 
 function PasswordRecovery() {
     const [email, setEmail] = useState('')
     const [submitted, setSubmitted] = useState(false)
     const [error, setError] = useState('')
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault()
+        setError('')
+
         if (!email) {
             setError('Insert your email')
             return
         }
-        // TODO: Implement actual password recovery logic
-        setSubmitted(true)
+
+        try {
+            await requestPasswordReset(email)
+            setSubmitted(true)
+        } catch (err) {
+            setError(err.message || 'An error occurred. Please try again.')
+        }
     }
 
     return (
@@ -44,7 +52,7 @@ function PasswordRecovery() {
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     className="w-full py-3 px-4 rounded-btn bg-primary-container/10 border-2 border-primary-container text-on-primary outline-none transition-all duration-200 focus:border-primary focus:shadow-[0_0_0_3px_rgba(98,151,177,0.2)]"
-                                    placeholder="nome@email.com"
+                                    placeholder="name@email.com"
                                 />
                             </div>
 

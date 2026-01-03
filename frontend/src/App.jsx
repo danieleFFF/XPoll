@@ -3,6 +3,7 @@ import Home from './pages/Home.jsx'
 import Login from './pages/Login.jsx'
 import Signup from './pages/Signup.jsx'
 import PasswordRecovery from './pages/PasswordRecovery.jsx'
+import ResetPassword from './pages/ResetPassword.jsx'
 import OAuthCallback from './pages/OAuthCallback.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import CreatePoll from './pages/CreatePoll.jsx'
@@ -19,6 +20,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/recovery" element={<PasswordRecovery />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/oauth/callback" element={<OAuthCallback />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/create" element={<CreatePoll />} />
