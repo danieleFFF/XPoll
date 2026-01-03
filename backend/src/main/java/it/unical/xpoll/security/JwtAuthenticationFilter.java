@@ -18,9 +18,6 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Optional;
 
-/**
- * Filter that validates JWT tokens on incoming requests.
- */
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {

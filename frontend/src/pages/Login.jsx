@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { login } from '../services/AuthService'
 
 function Login() {
     const navigate = useNavigate()
@@ -7,13 +8,20 @@ function Login() {
     const [password, setPassword] = useState('')
     const [error, setError] = useState('')
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault()
-        // TODO: Implement actual login logic
-        if (email && password) {
-            navigate('/dashboard')
-        } else {
+        setError('')
+
+        if (!email || !password) {
             setError('Insert email and password')
+            return
+        }
+
+        try {
+            await login(email, password)
+            navigate('/dashboard')
+        } catch (err) {
+            setError(err.message || 'Login failed')
         }
     }
 

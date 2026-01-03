@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { register } from '../services/AuthService'
 
 function Signup() {
     const navigate = useNavigate()
@@ -15,9 +16,10 @@ function Signup() {
         setFormData({ ...formData, [e.target.name]: e.target.value })
     }
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault()
-        // only a try
+        setError('')
+
         if (formData.password !== formData.confirmPassword) {
             setError('Passwords do not match')
             return
@@ -26,8 +28,13 @@ function Signup() {
             setError('Fill in all fields')
             return
         }
-        // TODO: Implement actual signup logic
-        navigate('/dashboard')
+
+        try {
+            await register(formData.name, formData.email, formData.password)
+            navigate('/dashboard')
+        } catch (err) {
+            setError(err.message || 'Registration failed')
+        }
     }
 
     return (

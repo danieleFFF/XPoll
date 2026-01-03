@@ -8,6 +8,14 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
+/* 
+ * Send the email using the JavaMailSender 
+ * 
+ *    |\__/,|   (`\ 
+ *  _.|o o  |_   ) )
+ * -(((---(((-------- Pippi
+ * (Daniele, maybe the style for the email is to much?)
+ */
 @Service
 public class EmailService {
     @Autowired(required = false)

@@ -1,7 +1,13 @@
 package it.unical.xpoll.service;
 
+import it.unical.xpoll.dto.AuthResponseDto;
+import it.unical.xpoll.dto.LoginRequestDto;
+import it.unical.xpoll.dto.RegisterRequestDto;
+import it.unical.xpoll.dto.UserResponse;
+import it.unical.xpoll.model.AccessMode;
 import it.unical.xpoll.model.User;
 import it.unical.xpoll.repository.UserRepository;
+import it.unical.xpoll.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -20,6 +26,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
+    private final JwtTokenProvider tokenProvider;
 
     public Optional<User> getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -39,6 +46,51 @@ public class UserService {
 
     public Optional<User> findById(Long id) {
         return userRepository.findById(id);
+    }
+
+    public AuthResponseDto register(RegisterRequestDto request) {
+        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+            throw new RuntimeException("Email already exists");
+        }
+
+        User user = new User();
+        user.setUsername(request.getName());
+        user.setEmail(request.getEmail());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setAccessMode(AccessMode.LOCAL);
+        user.setRegistrationDate(LocalDateTime.now());
+
+        userRepository.save(user);
+
+        String token = tokenProvider.returnValidationToken(user);
+        return AuthResponseDto.builder()
+                .token(token)
+                .user(toUserResponse(user))
+                .build();
+    }
+
+    public AuthResponseDto login(LoginRequestDto request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new RuntimeException("Invalid email or password"));
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new RuntimeException("Invalid email or password");
+        }
+
+        String token = tokenProvider.returnValidationToken(user);
+        return AuthResponseDto.builder()
+                .token(token)
+                .user(toUserResponse(user))
+                .build();
+    }
+
+    private UserResponse toUserResponse(User user) {
+        return UserResponse.builder()
+                .id(user.getId())
+                .email(user.getEmail())
+                .username(user.getUsername())
+                .accessMode(user.getAccessMode().name())
+                .build();
     }
 
     /**
