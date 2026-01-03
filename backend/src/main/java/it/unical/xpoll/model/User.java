@@ -31,7 +31,7 @@ public class User {
     private String username;
 
     @Column
-    private String password; // Nullable for OAuth usersz
+    private String password;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -39,6 +39,13 @@ public class User {
 
     @Column
     private LocalDateTime registrationDate;
+
+    // Email reset
+    @Column
+    private String resetToken;
+
+    @Column
+    private LocalDateTime resetTokenExpiry;
 
     @Column(unique = true)
     private String googleId; // For OAuth users
