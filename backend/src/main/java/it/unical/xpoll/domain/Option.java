@@ -24,5 +24,6 @@ public class Option {
     private Boolean isAIGenerated = false;
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "question_id")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Question question;
 }
