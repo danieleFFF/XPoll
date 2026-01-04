@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { SessionProvider } from './context/SessionContext'
 import Home from './pages/Home.jsx'
 import Login from './pages/Login.jsx'
 import Signup from './pages/Signup.jsx'
@@ -15,20 +16,22 @@ import Master from './pages/Master.jsx'
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/recovery" element={<PasswordRecovery />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/oauth/callback" element={<OAuthCallback />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/create" element={<CreatePoll />} />
-        <Route path="/lobby/:code" element={<Lobby />} />
-        <Route path="/vote/:code" element={<Vote />} />
-        <Route path="/view/:code" element={<View />} />
-        <Route path="/master/:code" element={<Master />} />
-      </Routes>
+      <SessionProvider>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/recovery" element={<PasswordRecovery />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/oauth/callback" element={<OAuthCallback />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/create" element={<CreatePoll />} />
+          <Route path="/lobby/:code" element={<Lobby />} />
+          <Route path="/vote/:code" element={<Vote />} />
+          <Route path="/view/:code" element={<View />} />
+          <Route path="/master/:code" element={<Master />} />
+        </Routes>
+      </SessionProvider>
     </BrowserRouter>
   )
 }

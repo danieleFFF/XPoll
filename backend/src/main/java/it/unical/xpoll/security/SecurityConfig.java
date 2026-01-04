@@ -40,7 +40,9 @@ public class SecurityConfig {
                                 "/oauth2/**",
                                 "/login/oauth2/**",
                                 "/api/auth/**",
-                                "/api/public/**")
+                                "/api/public/**",
+                                "/api/sessions/**",
+                                "/ws/**")
                         .permitAll().anyRequest().authenticated())
                 // redirectToOAuth()
                 .oauth2Login(oauth2 -> oauth2
