@@ -4,6 +4,7 @@
 
 #Backend 
 backend/target/
+backend/.env
 *.class
 *.jar
 *.war
