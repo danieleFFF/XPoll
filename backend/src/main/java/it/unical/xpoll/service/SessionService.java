@@ -13,7 +13,6 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 @Transactional
 public class SessionService {
     private final SessionRepository sessionRepository;
@@ -28,22 +27,23 @@ public class SessionService {
         Random random = new Random();
         StringBuilder code = new StringBuilder();
 
-        do{
+        do {
             code.setLength(0);
 
-            for(int i = 0; i < 6; i++){
+            for (int i = 0; i < 6; i++) {
                 code.append(chars.charAt(random.nextInt(chars.length())));
             }
-        } while(sessionRepository.existsByCode(code.toString()));
+        } while (sessionRepository.existsByCode(code.toString()));
 
         return code.toString();
     }
 
-    //Creates new session with poll data
-    public Session createSession(String creatorId, String title, Integer timeLimit, List<Map<String, Object>> questionsData) {
-        //Creates draft poll
-        Poll poll = pollService.createPoll(creatorId, title, timeLimit, questionsData);
-        //Publishes poll
+    // Creates new session with poll data
+    public Session createSession(String creatorId, String title, Integer timeLimit,
+            List<Map<String, Object>> questionsData) {
+        // Creates draft poll
+        Poll poll = pollService.createPoll(creatorId, title, null, timeLimit, false, false, true, questionsData);
+        // Publishes poll
         poll = pollService.publishPoll(poll);
 
         Session session = Session.builder()
@@ -55,28 +55,27 @@ public class SessionService {
                 .build();
 
         Session saved = sessionRepository.save(session);
-        log.info("Created session with code: {}",saved.getCode());
 
         return saved;
     }
 
-    //Gets session by code
+    // Gets session by code
     @Transactional(readOnly = true)
     public Optional<Session> getSession(String code) {
         return sessionRepository.findByCode(code.toUpperCase());
     }
 
-    //Joins session as participant.
+    // Joins session as participant.
     public Map<String, Object> joinSession(String code, String displayName) {
         Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
 
-        if (opt.isEmpty()){
+        if (opt.isEmpty()) {
             return Map.of("success", false, "error", "Session not found");
         }
 
         Session session = opt.get();
 
-        if(session.getState() == SessionState.CLOSED){
+        if (session.getState() == SessionState.CLOSED) {
             return Map.of("success", false, "error", "Session is closed");
         }
 
@@ -84,12 +83,11 @@ public class SessionService {
         boolean nameExists = session.getParticipants().stream()
                 .anyMatch(p -> p.getName().equalsIgnoreCase(displayName));
 
-        if (nameExists){
+        if (nameExists)
             return Map.of("success", false, "error", "Display name already taken", "code", "NAME_TAKEN");
-        }
 
         // Create new participant linked to session
-        Participant participant =Participant.builder()
+        Participant participant = Participant.builder()
                 .name(displayName)
                 .session(session)
                 .sessionToken(UUID.randomUUID().toString())
@@ -99,11 +97,11 @@ public class SessionService {
 
         participantRepository.save(participant);
 
-        //Adds participant to session list
+        // Adds participant to session list
         session.addParticipant(participant);
         sessionRepository.save(session);
 
-        //Broadcasts participant that  joined.
+        // Broadcasts participant that joined.
         broadcastSessionUpdate(code, "PARTICIPANT_JOINED", Map.of(
                 "participant", Map.of("name", displayName, "joinedAt", participant.getJoinedAt())));
 
@@ -120,11 +118,11 @@ public class SessionService {
         return result;
     }
 
-    //Launches poll and starts timer
-    public boolean launchPoll(String code, String creatorId){
+    // Launches poll and starts timer
+    public boolean launchPoll(String code, String creatorId) {
         Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
 
-        if(opt.isEmpty())
+        if (opt.isEmpty())
             return false;
 
         Session session = opt.get();
@@ -143,11 +141,11 @@ public class SessionService {
         return true;
     }
 
-    //Closes poll.
-    public boolean closePoll(String code, String creatorId){
+    // Closes poll.
+    public boolean closePoll(String code, String creatorId) {
         Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
 
-        if(opt.isEmpty())
+        if (opt.isEmpty())
             return false;
 
         Session session = opt.get();
@@ -163,8 +161,8 @@ public class SessionService {
         return true;
     }
 
-    //Shows results to participants
-    public boolean showResults(String code, String creatorId){
+    // Shows results to participants
+    public boolean showResults(String code, String creatorId) {
         Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
 
         if (opt.isEmpty())
@@ -184,7 +182,7 @@ public class SessionService {
         return true;
     }
 
-    //Exits without showing results.
+    // Exits without showing results.
     public boolean exitWithoutResults(String code, String creatorId) {
         Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
 
@@ -205,8 +203,8 @@ public class SessionService {
         return true;
     }
 
-    //Deletes session.
-    public boolean deleteSession(String code, String creatorId){
+    // Deletes session.
+    public boolean deleteSession(String code, String creatorId) {
         Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
 
         if (opt.isEmpty())
@@ -223,13 +221,11 @@ public class SessionService {
         return true;
     }
 
-    //Submits participant's votes
+    // Submits participant's votes
     public boolean submitVotes(String code, String participantName, Map<String, Integer> answers) {
-        log.info("submitVotes called: code={}, participantName={}, answers={}", code, participantName, answers);
-
         Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
 
-        if (opt.isEmpty()){
+        if (opt.isEmpty()) {
             return false;
         }
 
@@ -239,18 +235,18 @@ public class SessionService {
             return false;
         }
 
-        //Finds participant  by name in this session
+        // Finds participant by name in this session
         Optional<Participant> participantOpt = session.getParticipants().stream()
                 .filter(p -> p.getName().equalsIgnoreCase(participantName))
                 .findFirst();
 
-        if (participantOpt.isEmpty()){
+        if (participantOpt.isEmpty()) {
             return false;
         }
 
         Participant participant = participantOpt.get();
 
-        //Gets existing votes for this participant
+        // Gets existing votes for this participant
         List<Vote> existingVotes = voteRepository.findBySessionIdAndParticipantId(session.getId(), participant.getId());
         Set<Long> answeredQuestionIds = existingVotes.stream()
                 .map(v -> v.getQuestion().getId())
@@ -262,7 +258,7 @@ public class SessionService {
                 Long questionId = Long.valueOf(entry.getKey());
                 Integer optionIndex = entry.getValue();
 
-                //Skips if already answered
+                // Skips if already answered
                 if (answeredQuestionIds.contains(questionId)) {
                     continue;
                 }
@@ -272,7 +268,7 @@ public class SessionService {
                     continue;
                 }
 
-                if (optionIndex >= 0 && optionIndex < question.getOptions().size()){
+                if (optionIndex >= 0 && optionIndex < question.getOptions().size()) {
                     Option selectedOption = question.getOptions().get(optionIndex);
 
                     Vote vote = Vote.builder()
@@ -290,16 +286,15 @@ public class SessionService {
                 voteRepository.saveAll(votesToSave);
             }
 
-            //Broadcasts update.
+            // Broadcasts update.
             broadcastSessionUpdate(code, "VOTE_SUBMITTED", Map.of("status", "ok"));
             return true;
         } catch (Exception e) {
-            log.error("Error saving votes", e);
             return false;
         }
     }
 
-    //Gets remaining time
+    // Gets remaining time
     @Transactional(readOnly = true)
     public int getRemainingTime(String code) {
         Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
@@ -309,7 +304,7 @@ public class SessionService {
 
         Session session = opt.get();
 
-        if(session.getTimerStartedAt() == null){
+        if (session.getTimerStartedAt() == null) {
             return session.getPoll().getTimeLimit() != null ? session.getPoll().getTimeLimit() : 0;
         }
 
@@ -318,7 +313,7 @@ public class SessionService {
         return Math.max(0, timeLimit - (int) elapsed);
     }
 
-    //Calculates aggregate results .
+    // Calculates aggregate results .
     @Transactional(readOnly = true)
     public Map<String, Object> getResults(String code) {
         Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
@@ -333,7 +328,7 @@ public class SessionService {
 
         for (Question question : poll.getQuestions()) {
             List<Map<String, Object>> optionResults = new ArrayList<>();
-            //Filters votes for this question
+            // Filters votes for this question
             List<Vote> questionVotes = allVotes.stream()
                     .filter(v -> v.getQuestion().getId().equals(question.getId()))
                     .toList();
@@ -362,35 +357,35 @@ public class SessionService {
 
         Map<String, Object> response = new HashMap<>();
         response.put("pollTitle", poll.getTitle());
-        //counts distinct voters
+        // counts distinct voters
         response.put("totalParticipants", allVotes.stream().map(v -> v.getParticipant().getId()).distinct().count());
         response.put("questions", questionsResults);
 
         return response;
     }
 
-    //Gets personalized results
+    // Gets personalized results
     @Transactional(readOnly = true)
     public Map<String, Object> getParticipantResults(String code, String participantName) {
         Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
 
-        if(opt.isEmpty())
+        if (opt.isEmpty())
             return null;
 
         Session session = opt.get();
         Poll poll = session.getPoll();
 
-        //Finds participant
+        // Finds participant
         Optional<Participant> participantOpt = session.getParticipants().stream()
                 .filter(p -> p.getName().equalsIgnoreCase(participantName))
                 .findFirst();
 
-        if (participantOpt.isEmpty()){
+        if (participantOpt.isEmpty()) {
             return null;
         }
         Participant participant = participantOpt.get();
 
-        //Gets  participant's votes
+        // Gets participant's votes
         List<Vote> myVotes = voteRepository.findBySessionIdAndParticipantId(session.getId(), participant.getId());
         int correctCount = 0;
         List<Map<String, Object>> questionsResults = new ArrayList<>();
@@ -404,7 +399,7 @@ public class SessionService {
             qResult.put("id", question.getId());
             qResult.put("text", question.getText());
 
-            //Maps options to DTO
+            // Maps options to DTO
             List<Map<String, Object>> optionsDTO = question.getOptions().stream()
                     .map(o -> {
                         Map<String, Object> map = new HashMap<>();
@@ -429,7 +424,7 @@ public class SessionService {
                 boolean isCorrect = (selectedIndex != -1 && selectedIndex == correctAnswerIndex);
                 qResult.put("isCorrect", isCorrect);
 
-                if(isCorrect)
+                if (isCorrect)
                     correctCount++;
             } else {
                 qResult.put("isCorrect", false);
@@ -448,7 +443,7 @@ public class SessionService {
         return result;
     }
 
-    //Broadcasts session update to all connected participants
+    // Broadcasts session update to all connected participants
     private void broadcastSessionUpdate(String code, String type, Map<String, Object> payload) {
         Map<String, Object> message = new HashMap<>();
         message.put("type", type);
