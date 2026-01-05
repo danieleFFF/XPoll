@@ -46,5 +46,6 @@ public class Question {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "poll_id")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Poll poll;
 }

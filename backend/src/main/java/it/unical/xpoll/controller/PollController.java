@@ -14,14 +14,18 @@ public class PollController {
     private final PollService pollService;
 
     @PostMapping
-    public ResponseEntity<?> createPoll(@RequestBody Map<String, Object> body){
+    public ResponseEntity<?> createPoll(@RequestBody Map<String, Object> body) {
         try {
-            String creatorId = (String) body.get("creatorId");
+            String creatorId = String.valueOf(body.get("creatorId"));
             String title = (String) body.get("title");
-            Integer timeLimit = (Integer) body.get("timeLimit");
+            String description = (String) body.get("description");
+            Integer timeLimit = body.get("timeLimit") != null ? ((Number) body.get("timeLimit")).intValue() : null;
+            Boolean hasScore = (Boolean) body.getOrDefault("hasScore", false);
+            Boolean isAnonymous = (Boolean) body.getOrDefault("isAnonymous", false);
+            Boolean showResults = (Boolean) body.getOrDefault("showResults", true);
             java.util.List<Map<String, Object>> questions = (java.util.List<Map<String, Object>>) body.get("questions");
-
-            Poll poll = pollService.createPoll(creatorId, title, timeLimit, questions);
+            Poll poll = pollService.createPoll(creatorId, title, description, timeLimit, hasScore, isAnonymous,
+                    showResults, questions);
             return ResponseEntity.ok(poll);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -32,7 +36,7 @@ public class PollController {
     public ResponseEntity<?> updatePoll(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         try {
             String title = (String) body.getOrDefault("title", "Untitled");
-            Integer timeLimit = (Integer) body.get("timeLimit");
+            Integer timeLimit = body.get("timeLimit") != null ? ((Number) body.get("timeLimit")).intValue() : null;
             Poll updated = pollService.updatePoll(id, title, timeLimit);
             return ResponseEntity.ok(updated);
         } catch (RuntimeException e) {
@@ -41,7 +45,7 @@ public class PollController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deletePoll(@PathVariable Long id){
+    public ResponseEntity<?> deletePoll(@PathVariable Long id) {
         try {
             pollService.deletePoll(id);
             return ResponseEntity.ok(Map.of("success", true));

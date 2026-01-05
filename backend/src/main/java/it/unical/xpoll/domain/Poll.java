@@ -27,6 +27,8 @@ public class Poll {
     private Boolean hasScore = false;
     @Builder.Default
     private Boolean isAnonymous = false;
+    @Builder.Default
+    private Boolean showResults = true;
 
     @Enumerated(EnumType.STRING)
     @Builder.Default
