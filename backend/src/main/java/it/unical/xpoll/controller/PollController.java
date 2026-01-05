@@ -2,9 +2,11 @@ package it.unical.xpoll.controller;
 
 import it.unical.xpoll.domain.Poll;
 import it.unical.xpoll.service.PollService;
+import it.unical.xpoll.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -12,9 +14,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class PollController {
     private final PollService pollService;
+    private final UserService userService;
 
     @PostMapping
-    public ResponseEntity<?> createPoll(@RequestBody Map<String, Object> body){
+    public ResponseEntity<?> createPoll(@RequestBody Map<String, Object> body) {
         try {
             String creatorId = (String) body.get("creatorId");
             String title = (String) body.get("title");
@@ -41,12 +44,20 @@ public class PollController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deletePoll(@PathVariable Long id){
+    public ResponseEntity<?> deletePoll(@PathVariable Long id) {
         try {
             pollService.deletePoll(id);
             return ResponseEntity.ok(Map.of("success", true));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
+    }
+
+    //Gets all polls created by the current user.
+    @GetMapping("/my-polls")
+    public ResponseEntity<List<Poll>> getMyPolls() {
+        return userService.getCurrentUser()
+                .map(user -> ResponseEntity.ok(pollService.getMyPolls(String.valueOf(user.getId()))))
+                .orElse(ResponseEntity.notFound().build());
     }
 }
