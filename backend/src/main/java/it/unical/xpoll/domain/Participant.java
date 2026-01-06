@@ -21,8 +21,11 @@ public class Participant {
     private String sessionToken;
     @Builder.Default
     private Boolean isConnected = true;
-
     private Instant joinedAt;
+    private Instant submittedAt;
+    private Integer completionTimeSeconds;
+    @Column
+    private Long userId;
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "session_id")
     private Session session;

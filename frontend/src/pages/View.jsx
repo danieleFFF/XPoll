@@ -51,6 +51,28 @@ function View() {
         )
     }
 
+    //only shows results if presenter has shared them
+    if(!session.resultsShown) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center px-5 py-10">
+                <div className="text-center">
+                    <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-primary/20 flex items-center justify-center">
+                        <svg className="w-12 h-12 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                    </div>
+                    <h1 className="text-2xl font-bold text-on-primary mb-4">Results Not Shared Yet</h1>
+                    <p className="text-primary-container mb-8">The presenter has not shared the results yet.</p>
+                    <button
+                        onClick={() => navigate('/dashboard')}
+                        className="py-3 px-6 rounded-btn font-medium text-on-primary bg-primary transition-all duration-200 hover:bg-[#527d91]">
+                        Back to Dashboard
+                    </button>
+                </div>
+            </div>
+        )
+    }
+
     const getMaxVotes = (options) => Math.max(...options.map(opt => opt.votes), 1)
 
     return (

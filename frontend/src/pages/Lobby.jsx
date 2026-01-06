@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useSession, SESSION_STATES } from '../context/SessionContext'
+import { getCurrentUser } from '../services/AuthService'
 
 //Lobby page for participants when joining  poll
 function Lobby() {
@@ -12,12 +13,15 @@ function Lobby() {
     const [myParticipantId, setMyParticipantId] = useState(null)
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(true)
+    const sessionStateRef = useRef(null) //Tracks current session state
 
     //Fetches session
     useEffect(() => {
         const fetchSessionData = async () => {
             setLoading(true)
-            await getSession(code)
+            console.log('Lobby: Fetching session with code:', code, '-> uppercase:', code.toUpperCase())
+            const result = await getSession(code.toUpperCase())
+            console.log('Lobby: getSession result:', result)
             setLoading(false)
         }
         fetchSessionData()
@@ -26,13 +30,60 @@ function Lobby() {
     //Use currentSession for real-time updates
     const session = currentSession
 
+    //Keep sessionStateRef in sync with session state.
+    useEffect(() => {
+        sessionStateRef.current = session?.state
+    }, [session?.state])
+
     //Watches for session state changes to redirect.
     useEffect(() => {
         if (joined && session){
             //redirects to Vote page when poll starts.
-            if(session.state === SESSION_STATES.OPEN){ navigate(`/vote/${code}`) }
+            if(session.state === SESSION_STATES.OPEN){ navigate(`/vote/${code.toUpperCase()}`) }
         }
     }, [session?.state, joined, code, navigate])
+
+    //Automatically leaves session when participant navigates away or closes the page
+    useEffect(() => {
+        if(!joined || !nickname) return
+
+        const leaveSession = async () => {
+            try {
+                await fetch(`/api/sessions/${code.toUpperCase()}/leave`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ participantName: nickname })
+                })
+            } catch (e) {
+                console.error('Error leaving session:', e)
+            }
+            //Uses localStorage for logged-in users (cross-tab) and sessionStorage for guests (per-tab)
+            const storageKey = `xpoll_participant_${code.toUpperCase()}`
+
+            if (getCurrentUser()) { localStorage.removeItem(storageKey) }
+            else { sessionStorage.removeItem(storageKey) }
+        }
+
+        //Handles page close/refresh.
+        const handleBeforeUnload = () => {
+            navigator.sendBeacon(
+                `/api/sessions/${code.toUpperCase()}/leave`,
+                JSON.stringify({ participantName: nickname })
+            )
+        }
+
+        window.addEventListener('beforeunload', handleBeforeUnload)
+
+        //Leaves session when component is destroyed.
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload)
+            //Only leave if poll hasn't started.
+            //Uses ref to get current state value
+            if(sessionStateRef.current === SESSION_STATES.WAITING){
+                leaveSession()
+            }
+        }
+    }, [joined, nickname, code])
 
     //Handles join form submission
     const handleJoin = async (e) => {
@@ -51,14 +102,16 @@ function Lobby() {
             return
         }
 
-        const result = await joinSession(code, nickname.trim())
+        const result = await joinSession(code.toUpperCase(), nickname.trim())
 
         if(result.success){
             setJoined(true)
             setMyParticipantId(result.participant?.id)
-            //Saves participant name for Vote page.
-            localStorage.setItem(`xpoll_participant_${code}`, nickname.trim())
-        }else {
+            //Uses localStorage for logged-in users (cross-tab), sessionStorage for guests (per-tab)
+            const storageKey = `xpoll_participant_${code.toUpperCase()}`
+            if(getCurrentUser()){ localStorage.setItem(storageKey, nickname.trim()) }
+            else { sessionStorage.setItem(storageKey, nickname.trim()) }
+        } else {
             setError(result.error || 'Error joining the session.')
         }
     }
@@ -106,14 +159,14 @@ function Lobby() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
                     </div>
-                    <h1 className="text-2xl font-bold text-on-primary mb-2">Poll Finished</h1>
+                    <h1 className="text-2xl font-bold text-on-primary mb-2">Poll Ended</h1>
                     <p className="text-primary-container mb-8">
                         The poll has already ended.
                     </p>
                     <button
-                        onClick={() => navigate(`/view/${code}`)}
+                        onClick={() => navigate(getCurrentUser() ? '/dashboard' : '/')}
                         className="py-3 px-6 rounded-btn font-medium text-on-primary bg-primary transition-all duration-200 hover:bg-[#527d91]">
-                        View Results
+                        {getCurrentUser() ? 'Back to Dashboard' : 'Back to Home'}
                     </button>
                 </div>
             </div>
@@ -180,7 +233,7 @@ function Lobby() {
                     The poll will start when the creator launches it
                 </p>
 
-                { /*Waiting animation */ }
+                { /*Waiting animation */}
                 <div className="flex justify-center mb-6">
                     <div className="flex gap-1">
                         <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
@@ -189,7 +242,7 @@ function Lobby() {
                     </div>
                 </div>
 
-                { /* Participants list */ }
+                { /* Participants list */}
                 <div>
                     <h3 className="text-sm font-semibold text-primary-container mb-3">
                         Waiting participants ({session.participants?.length || 0})
@@ -205,13 +258,30 @@ function Lobby() {
                     </div>
                 </div>
 
-                { /* Exit session button */ }
+                { /* Exit session button */}
                 <div className="mt-6 pt-6 border-t border-primary-container/20">
                     <button
-                        onClick={() => {
-                            localStorage.removeItem(`xpoll_participant_${code}`)
+                        onClick={async () => {
+                            // Call backend to remove participant from session
+                            try {
+                                await fetch(`/api/sessions/${code.toUpperCase()}/leave`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ participantName: nickname })
+                                })
+                            } catch (e) {
+                                console.error('Error leaving session:', e)
+                            }
+
+                            const storageKey = `xpoll_participant_${code.toUpperCase()}`
+
+                            if(getCurrentUser()) {
+                                localStorage.removeItem(storageKey)
+                            } else {
+                                sessionStorage.removeItem(storageKey)
+                            }
                             setJoined(false)
-                            navigate('/')
+                            navigate('/dashboard')
                         }}
                         className="w-full py-3 px-5 rounded-btn font-medium text-danger border border-danger transition-all duration-200 hover:bg-danger/10">
                         Exit Session

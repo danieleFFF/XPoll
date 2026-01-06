@@ -5,14 +5,14 @@ function DraftCard({ title, questions, createdAt, onStart }) {
                 {title}
             </h3>
             <p className="text-sm text-primary-container mb-4">
-                {questions} domande • Creato il {createdAt}
+                {questions} questions • Created on {createdAt}
             </p>
             <div className="flex gap-3">
-                <button className="flex-1 py-2.5 px-5 border border-primary-container rounded-btn font-medium text-sm text-primary-container bg-transparent transition-all duration-200 hover:bg-primary-container/10 hover:-translate-y-0.5">
-                    Modifica
+                <button className="flex-1 py-2.5 px-5 border border-primary-container rounded-btn font-medium text-sm text-primary-container bg-transparent cursor-pointer transition-all duration-200 hover:bg-primary-container/10 hover:-translate-y-0.5">
+                    Edit
                 </button>
-                <button onClick={onStart} className="flex-1 py-2.5 px-5 border-none rounded-btn font-medium text-sm text-on-primary bg-primary transition-all duration-200 hover:bg-[#527d91] hover:-translate-y-0.5 hover:shadow-[0_4px_8px_rgba(98,151,177,0.3)]">
-                    Avvia
+                <button onClick={onStart} className="flex-1 py-2.5 px-5 border-none rounded-btn font-medium text-sm text-on-primary bg-primary cursor-pointer transition-all duration-200 hover:bg-[#527d91] hover:-translate-y-0.5 hover:shadow-[0_4px_8px_rgba(98,151,177,0.3)]">
+                    Start
                 </button>
             </div>
         </div>
