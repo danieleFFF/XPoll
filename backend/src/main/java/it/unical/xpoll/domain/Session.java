@@ -20,10 +20,11 @@ public class Session {
     @Column(nullable = false, unique = true, length = 6)
     private String code;
     private String creatorId;
+    //null if for anonymous/guest creators
+    private Long creatorUserId;
     @ManyToOne(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @JoinColumn(name = "poll_id")
     private Poll poll;
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default

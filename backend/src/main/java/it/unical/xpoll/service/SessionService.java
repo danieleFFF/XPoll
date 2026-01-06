@@ -40,7 +40,8 @@ public class SessionService {
     }
 
     //Creates new session with poll data
-    public Session createSession(String creatorId, String title, Integer timeLimit, List<Map<String, Object>> questionsData) {
+    public Session createSession(String creatorId, Long creatorUserId, String title, Integer timeLimit,
+            List<Map<String, Object>> questionsData) {
         //Creates draft poll
         Poll poll = pollService.createPoll(creatorId, title, timeLimit, questionsData);
         //Publishes poll
@@ -49,6 +50,7 @@ public class SessionService {
         Session session = Session.builder()
                 .code(generateCode())
                 .creatorId(creatorId)
+                .creatorUserId(creatorUserId)
                 .poll(poll)
                 .state(SessionState.WAITING)
                 .createdAt(Instant.now())
@@ -95,6 +97,7 @@ public class SessionService {
                 .sessionToken(UUID.randomUUID().toString())
                 .joinedAt(Instant.now())
                 .isConnected(true)
+                .userId(userId) //Links authenticated user for history tracking.
                 .build();
 
         participantRepository.save(participant);
@@ -118,6 +121,37 @@ public class SessionService {
         result.put("participant", participantData);
 
         return result;
+    }
+
+    //removes participant from session .
+    public boolean leaveSession(String code, String participantName) {
+        Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
+
+        if (opt.isEmpty()) {
+            return false;
+        }
+
+        Session session = opt.get();
+
+        //Finds and removes participant by name
+        Optional<Participant> participantOpt = session.getParticipants().stream()
+                .filter(p -> p.getName().equalsIgnoreCase(participantName))
+                .findFirst();
+
+        if (participantOpt.isEmpty()) {
+            return false;
+        }
+
+        Participant participant = participantOpt.get();
+        session.getParticipants().remove(participant);
+        participantRepository.delete(participant);
+        sessionRepository.save(session);
+
+        //Broadcasts participant left.
+        broadcastSessionUpdate(code, "PARTICIPANT_LEFT", Map.of(
+                "participantName", participantName));
+
+        return true;
     }
 
     //Launches poll and starts timer
@@ -288,6 +322,16 @@ public class SessionService {
 
             if (!votesToSave.isEmpty()) {
                 voteRepository.saveAll(votesToSave);
+
+                //Calculates and saves completion time (only on first submission)
+                if(participant.getSubmittedAt() == null && session.getTimerStartedAt() != null) {
+                    Instant now = Instant.now();
+                    participant.setSubmittedAt(now);
+                    int completionSeconds = (int) (now.getEpochSecond() - session.getTimerStartedAt().getEpochSecond());
+                    participant.setCompletionTimeSeconds(completionSeconds);
+                    participantRepository.save(participant);
+                    log.info("Participant {} completed in {} seconds", participantName, completionSeconds);
+                }
             }
 
             //Broadcasts update.

@@ -1,22 +1,28 @@
 package it.unical.xpoll.service;
 
+import it.unical.xpoll.domain.Option;
+import it.unical.xpoll.domain.Participant;
+import it.unical.xpoll.domain.Vote;
 import it.unical.xpoll.dto.AuthResponseDto;
 import it.unical.xpoll.dto.LoginRequestDto;
+import it.unical.xpoll.dto.ParticipationResponse;
 import it.unical.xpoll.dto.RegisterRequestDto;
 import it.unical.xpoll.dto.UserResponse;
 import it.unical.xpoll.model.AccessMode;
 import it.unical.xpoll.model.User;
+import it.unical.xpoll.repository.ParticipantRepository;
 import it.unical.xpoll.repository.UserRepository;
+import it.unical.xpoll.repository.VoteRepository;
 import it.unical.xpoll.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
-
 import java.util.Optional;
 
 @Service
@@ -24,6 +30,8 @@ import java.util.Optional;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final ParticipantRepository participantRepository;
+    private final VoteRepository voteRepository;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
@@ -90,7 +98,175 @@ public class UserService {
                 .email(user.getEmail())
                 .username(user.getUsername())
                 .accessMode(user.getAccessMode().name())
+                .registrationDate(user.getRegistrationDate())
                 .build();
+    }
+
+    //Update username for current user
+    public User updateUsername(String newUsername) {
+        User user = getCurrentUser().orElseThrow(() -> new RuntimeException("User not authenticated"));
+
+        //Check if username is already taken by another user.
+        Optional<User> existingUser = userRepository.findByUsername(newUsername);
+
+        if (existingUser.isPresent() && !existingUser.get().getId().equals(user.getId())) {
+            throw new RuntimeException("Username already taken");
+        }
+
+        user.setUsername(newUsername);
+
+        return userRepository.save(user);
+    }
+
+    //Change password for LOCAL users only.
+    public void changePassword(String currentPassword, String newPassword) {
+        User user = getCurrentUser().orElseThrow(() -> new RuntimeException("User not authenticated"));
+
+        //Only local users can change password.
+        if(user.getAccessMode() != AccessMode.LOCAL) {
+            throw new RuntimeException("Password change is only available for local accounts");
+        }
+
+        //Verifies current password.
+        if(!passwordEncoder.matches(currentPassword, user.getPassword())) {
+            throw new RuntimeException("Current password is incorrect");
+        }
+
+        //Validates new password (min 6 chars, at least one letter and one number).
+        if (newPassword.length() < 6) {
+            throw new RuntimeException("Password must be at least 6 characters");
+        }
+
+        boolean hasLetter = newPassword.chars().anyMatch(Character::isLetter);
+        boolean hasNumber = newPassword.chars().anyMatch(Character::isDigit);
+
+        if (!hasLetter) {
+            throw new RuntimeException("Password must contain at least one letter");
+        }
+        if (!hasNumber) {
+            throw new RuntimeException("Password must contain at least one number");
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+    }
+
+    //Get participation history for a user.
+    public List<ParticipationResponse> getUserParticipations(Long userId) {
+        List<Participant> participations = participantRepository.findByUserId(userId);
+
+        return participations.stream()
+                .filter(p -> p.getSession() != null && p.getSession().getPoll() != null)
+                //Only includes participations where the poll actually ended (not just joined lobby or in progress).
+                .filter(p -> p.getSession().getState() == it.unical.xpoll.domain.SessionState.CLOSED)
+                //Only includes if participant actually submitted votes or is the presenter.
+                .filter(p -> {
+                    boolean isPresenter = p.getUserId() != null &&
+                            p.getSession().getCreatorUserId() != null &&
+                            p.getUserId().equals(p.getSession().getCreatorUserId());
+
+                    if (isPresenter)
+                        return true;
+                    //Checks if participant submitted any votes
+                    List<Vote> votes = voteRepository.findBySessionIdAndParticipantId(p.getSession().getId(),
+                            p.getId());
+                    return !votes.isEmpty();
+                })
+                .map(p -> {
+                    //Checks if this participant is the presenter .
+                    boolean isPresenter = p.getUserId() != null &&
+                            p.getSession().getCreatorUserId() != null &&
+                            p.getUserId().equals(p.getSession().getCreatorUserId());
+                    boolean hasVoted = voteRepository.existsBySessionIdAndParticipantId(p.getSession().getId(),
+                            p.getId());
+
+                    int score = 0;
+                    Integer maxScore = 0;
+
+                    if (hasVoted){
+                        score = calculateScore(p);
+                        maxScore = calculateMaxScore(p.getSession().getPoll());
+                    }
+
+                    return ParticipationResponse.builder()
+                            .sessionId(p.getSession().getId())
+                            .pollTitle(p.getSession().getPoll().getTitle())
+                            .participationDate(p.getJoinedAt())
+                            .score(score)
+                            .maxScore(maxScore)
+                            .isPresenter(isPresenter)
+                            .hasParticipated(hasVoted)
+                            .completionTimeSeconds(p.getCompletionTimeSeconds())
+                            .totalTimeSeconds(p.getSession().getPoll().getTimeLimit())
+                            .build();
+                })
+                //Sorts by participation date descending .
+                .sorted((a, b) -> b.getParticipationDate().compareTo(a.getParticipationDate()))
+                .collect(Collectors.toList());
+    }
+
+    private Integer calculateMaxScore(it.unical.xpoll.domain.Poll poll) {
+        int maxScore = 0;
+        for (it.unical.xpoll.domain.Question q : poll.getQuestions()) {
+            int questionMax = 0;
+
+            boolean hasValues = q.getOptions().stream().anyMatch(o -> o.getValue() != null && o.getValue() > 0);
+
+            if (hasValues){
+                if (q.getType() == it.unical.xpoll.domain.Question.QuestionType.MULTIPLE_CHOICE) {
+                    questionMax = q.getOptions().stream()
+                            .filter(o -> o.getValue() != null && o.getValue() > 0)
+                            .mapToInt(it.unical.xpoll.domain.Option::getValue)
+                            .sum();
+                }else {
+                    questionMax = q.getOptions().stream()
+                            .filter(o -> o.getValue() != null && o.getValue() > 0)
+                            .mapToInt(it.unical.xpoll.domain.Option::getValue)
+                            .max().orElse(0);
+                }
+            } else{
+                if(q.getCorrectAnswer() != null) {
+                    questionMax = 1;
+                }
+            }
+            maxScore += questionMax;
+        }
+        return maxScore;
+    }
+
+    //Calculate total score for a participant based on their votes.
+    private int calculateScore(Participant participant) {
+        List<Vote> votes = voteRepository.findBySessionIdAndParticipantId(participant.getSession().getId(),
+                participant.getId());
+        int totalScore = 0;
+
+        for (Vote v : votes){
+            if (v.getOption() == null || v.getQuestion() == null) {
+                continue;
+            }
+
+            //Checks if option has explicit value/score.
+            if (v.getOption().getValue() != null && v.getOption().getValue() > 0) {
+                totalScore += v.getOption().getValue();
+                continue;
+            }
+
+            //Otherwise checks if this is correct answer based on index.
+            Integer correctAnswerIndex = v.getQuestion().getCorrectAnswer();
+            if (correctAnswerIndex != null) {
+                List<Option> options = v.getQuestion().getOptions();
+                //finds the index of the selected option.
+                for (int i = 0; i < options.size(); i++) {
+                    if(options.get(i).getId().equals(v.getOption().getId())) {
+                        if(i == correctAnswerIndex) {
+                            totalScore += 1; // 1 point for correct answer.
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        return totalScore;
     }
 
     /**

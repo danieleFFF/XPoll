@@ -91,4 +91,8 @@ public class PollService {
 
         pollRepository.delete(poll);
     }
+
+    public List<Poll> getMyPolls(String creatorId) {
+        return pollRepository.findByCreatorId(creatorId);
+    }
 }

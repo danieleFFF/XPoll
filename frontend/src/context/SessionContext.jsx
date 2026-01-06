@@ -58,20 +58,25 @@ export function SessionProvider({ children }){
                 break
             case 'SESSION_STATE_CHANGED':
                 //Updates local session state.
-                setCurrentSession(prev => prev ? { ...prev, state: data.state, timerStartedAt: data.timerStartedAt || prev.timerStartedAt} : prev)
+                setCurrentSession(prev => prev ? { ...prev, state: data.state, timerStartedAt: data.timerStartedAt || prev.timerStartedAt } : prev)
                 break
             case 'RESULTS_SHOWN':
                 setCurrentSession(prev => prev ? { ...prev, resultsShown: true, state: SESSION_STATES.CLOSED } : prev)
                 break
             case 'SESSION_CLOSED':
-                setCurrentSession(prev => prev ? { ...prev, state: SESSION_STATES.CLOSED, exitedWithoutResults: data.exitedWithoutResults || false} : prev)
+                setCurrentSession(prev => prev ? { ...prev, state: SESSION_STATES.CLOSED, exitedWithoutResults: data.exitedWithoutResults || false } : prev)
                 break
             case 'SESSION_DELETED':
                 setCurrentSession(null)
                 break
             case 'VOTE_SUBMITTED':
-                //Updates vote count.
-                setCurrentSession(prev => prev ? { ...prev, voteCount: data.voterCount } : prev)
+                //Updates scores and vote count.
+                fetchSession(code)
+                break
+            case 'PARTICIPANT_LEFT':
+                //forces state update.
+                fetchSession(code).then(session => {
+                    if(session) setCurrentSession(session) })
                 break
         }
     }, [fetchSession])
@@ -115,11 +120,24 @@ export function SessionProvider({ children }){
     //Creates new session with poll data.
     const createSession = useCallback(async (pollData) => {
         try {
+            //Gets logged user's database id if available.
+            let creatorUserId = null;
+            const storedUser = localStorage.getItem('user');
+            if (storedUser){
+                try {
+                    const user = JSON.parse(storedUser);
+                    creatorUserId = user?.user?.id || user?.id || null;
+                } catch (e) {
+                    console.error('Error parsing user from localStorage', e);
+                }
+            }
+
             const response = await fetch(`${API_URL}/sessions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     creatorId: getUserId(),
+                    creatorUserId: creatorUserId,
                     title: pollData.title,
                     timeLimit: pollData.timeLimit,
                     questions: pollData.questions
@@ -142,18 +160,20 @@ export function SessionProvider({ children }){
 
     //Gets session by code (for creator and participants).
     const getSession = useCallback(async (code) => {
-        const session = await fetchSession(code)
-        if(session) { connectWebSocket(code) }
+        const normalizedCode = code.toUpperCase()
+        const session = await fetchSession(normalizedCode)
+        if(session) { connectWebSocket(normalizedCode) }
         return session
     }, [fetchSession, connectWebSocket])
 
     //Gets current user's session via code (creator only).
     const getMySession = useCallback(async (code) => {
+        const normalizedCode = code.toUpperCase()
         const creatorId = getUserId()
-        const session = await fetchSession(code)
+        const session = await fetchSession(normalizedCode)
 
         if (session && session.creatorId === creatorId){
-            connectWebSocket(code)
+            connectWebSocket(normalizedCode)
 
             return session
         }
@@ -163,10 +183,23 @@ export function SessionProvider({ children }){
     //Joins session as participant.
     const joinSession = useCallback(async (code, displayName) => {
         try {
+            //Gets current user's id if authenticated.
+            let userId = null;
+            const storedUser = localStorage.getItem('user');
+
+            if(storedUser){
+                try {
+                    const user = JSON.parse(storedUser);
+                    userId = user?.user?.id || user?.id || null;
+                } catch (e) {
+                    console.error('Error parsing user from localStorage', e);
+                }
+            }
+
             const response = await fetch(`${API_URL}/sessions/${code}/join`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ displayName })
+                body: JSON.stringify({ displayName, userId })
             })
 
             const result = await response.json()
@@ -375,7 +408,7 @@ export function SessionProvider({ children }){
         SESSION_STATES, getUserId
     }
 
-    return ( <SessionContext.Provider value={value}> {children} </SessionContext.Provider>)
+    return (<SessionContext.Provider value={value}> {children} </SessionContext.Provider>)
 }
 
 export function useSession() {
