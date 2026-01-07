@@ -57,11 +57,9 @@ function Lobby() {
             } catch (e) {
                 console.error('Error leaving session:', e)
             }
-            //Uses localStorage for logged-in users (cross-tab) and sessionStorage for guests (per-tab)
+            //Uses sessionStorage for all users (per-tab isolation)
             const storageKey = `xpoll_participant_${code.toUpperCase()}`
-
-            if (getCurrentUser()) { localStorage.removeItem(storageKey) }
-            else { sessionStorage.removeItem(storageKey) }
+            sessionStorage.removeItem(storageKey)
         }
 
         //Handles page close/refresh.
@@ -107,10 +105,9 @@ function Lobby() {
         if(result.success){
             setJoined(true)
             setMyParticipantId(result.participant?.id)
-            //Uses localStorage for logged-in users (cross-tab), sessionStorage for guests (per-tab)
+            //Uses sessionStorage for all users (per-tab isolation)
             const storageKey = `xpoll_participant_${code.toUpperCase()}`
-            if(getCurrentUser()){ localStorage.setItem(storageKey, nickname.trim()) }
-            else { sessionStorage.setItem(storageKey, nickname.trim()) }
+            sessionStorage.setItem(storageKey, nickname.trim())
         } else {
             setError(result.error || 'Error joining the session.')
         }
@@ -274,12 +271,7 @@ function Lobby() {
                             }
 
                             const storageKey = `xpoll_participant_${code.toUpperCase()}`
-
-                            if(getCurrentUser()) {
-                                localStorage.removeItem(storageKey)
-                            } else {
-                                sessionStorage.removeItem(storageKey)
-                            }
+                            sessionStorage.removeItem(storageKey)
                             setJoined(false)
                             navigate('/dashboard')
                         }}

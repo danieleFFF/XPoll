@@ -1,6 +1,5 @@
 package it.unical.xpoll.controller;
 
-import it.unical.xpoll.domain.Option;
 import it.unical.xpoll.domain.Session;
 import it.unical.xpoll.domain.Vote;
 import it.unical.xpoll.model.AccessMode;
@@ -282,16 +281,21 @@ public class SessionController {
             map.put("questions", questions);
         }
 
-        // Adds participants with their scores, completion time, and google status.
+        //Adds participants with their scores, completion time, and google status
+        //Filters out the "Presenter" participant in the ranking.
+        final int totalQuestions = session.getPoll() != null ? session.getPoll().getQuestions().size() : 0;
         map.put("participants", session.getParticipants().stream()
+                .filter(p -> !"Presenter".equals(p.getName())) //hides presenter
                 .map(p -> {
                     Map<String, Object> pMap = new HashMap<>();
                     pMap.put("id", p.getId());
                     pMap.put("name", p.getName());
                     pMap.put("joinedAt", p.getJoinedAt());
-                    // Calculates score from votes.
-                    int score = calculateParticipantScore(session.getId(), p.getId());
-                    pMap.put("score", score);
+                    // Calculates score and correct count from votes.
+                    int[] scoreAndCount = calculateParticipantScoreAndCount(session.getId(), p.getId());
+                    pMap.put("score", scoreAndCount[0]);
+                    pMap.put("correctCount", scoreAndCount[1]);
+                    pMap.put("totalQuestions", totalQuestions);
                     // Adds completion time if available
                     pMap.put("completionTimeSeconds", p.getCompletionTimeSeconds());
                     // Checks if user is logged in with google.
@@ -311,36 +315,38 @@ public class SessionController {
         return map;
     }
 
-    // Helper method to calculate participant score from votes.
-    private int calculateParticipantScore(Long sessionId, Long participantId) {
+    //Calculates participant score and correct answers count from votes.
+    //returns int[]{totalScore, correctCount}
+    private int[] calculateParticipantScoreAndCount(Long sessionId, Long participantId) {
         List<Vote> votes = voteRepository.findBySessionIdAndParticipantId(sessionId, participantId);
         int totalScore = 0;
-
-        System.out.println("DEBUG calculateParticipantScore: sessionId=" + sessionId + ", participantId="
-                + participantId + ", votes count=" + votes.size());
+        Set<Long> correctQuestionIds = new java.util.HashSet<>();
 
         for (Vote v : votes) {
             if (v.getOption() == null || v.getQuestion() == null) {
-                System.out.println("DEBUG: Skipping vote with null option or question");
                 continue;
             }
 
-            System.out.println("DEBUG: Vote option: text=" + v.getOption().getText() +
-                    ", value=" + v.getOption().getValue() +
-                    ", isCorrect=" + v.getOption().getIsCorrect());
+            boolean optionIsCorrect = false;
 
-            // Checks if option has explicit value/score.
-            if (v.getOption().getValue() != null && v.getOption().getValue() > 0) {
+            // Checks if option has explicit value/score (positive or negative).
+            if (v.getOption().getValue() != null && v.getOption().getValue() != 0) {
                 totalScore += v.getOption().getValue();
-                continue;
+                // Only mark as correct if value is positive
+                if (v.getOption().getValue() > 0) {
+                    optionIsCorrect = true;
+                }
+            }
+            // Otherwise checks if this option is marked as correct.
+            else if (v.getOption().getIsCorrect() != null && v.getOption().getIsCorrect()) {
+                totalScore += 1; // 1 point for correct answer.
+                optionIsCorrect = true;
             }
 
-            // Otherwise checks if this option is marked as correct.
-            if (v.getOption().getIsCorrect() != null && v.getOption().getIsCorrect()) {
-                totalScore += 1; // 1 point for correct answer.
+            if(optionIsCorrect) {
+                correctQuestionIds.add(v.getQuestion().getId());
             }
         }
-        System.out.println("DEBUG: Total score for participant " + participantId + " = " + totalScore);
-        return totalScore;
+        return new int[] { totalScore, correctQuestionIds.size() };
     }
 }

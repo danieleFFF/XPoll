@@ -162,7 +162,7 @@ function Dashboard() {
 
                                         {expandedParticipation === index && (
                                             <div className="px-4 pb-4 pt-0 border-t border-primary-container/20">
-                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
+                                                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-4">
                                                     <div>
                                                         <p className="text-xs text-primary-container mb-1">Poll Name</p>
                                                         <p className="text-on-primary">{p.pollTitle || 'Untitled Poll'}</p>
@@ -188,6 +188,14 @@ function Dashboard() {
                                                                     })()}
                                                                 </span>
                                                             </div>
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-primary-container mb-1">Score</p>
+                                                        <p className="text-on-primary font-semibold text-lg">
+                                                            {p.isPresenter ? ( <span className="text-primary-container">-</span>
+                                                            ) : ( <span>{p.score} <span className="text-sm font-normal text-primary-container">/ {p.maxScore} pts</span></span>
+                                                            )}
                                                         </p>
                                                     </div>
                                                 </div>

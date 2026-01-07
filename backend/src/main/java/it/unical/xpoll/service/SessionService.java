@@ -90,25 +90,38 @@ public class SessionService {
             throw new RuntimeException("Unauthorized: " + mismatch);
         }
 
-        // Deep copy of poll is NOT needed if we just link it.
-        // However, if we want independent sessions that snapshot the poll state, we
-        // might considered it.
-        // For now, let's link the EXISTING poll to the session, as per Domain Model
-        // usually.
-        // Checking Domain Model: Session has @ManyToOne Poll. One poll can have
-        // multiple sessions.
-        // So we associate the existing poll.
+        //parses creatorUserId from creatorId string
+        Long creatorUserId = null;
+        try {
+            creatorUserId = Long.parseLong(creatorId);
+        } catch (NumberFormatException e) {
+            //guest user - no userId
+        }
 
         Session session = Session.builder()
                 .code(generateCode())
                 .creatorId(creatorId)
-                // .creatorUserId() // Need to map if available
+                .creatorUserId(creatorUserId) // for history tracking
                 .createdAt(Instant.now())
                 .state(SessionState.WAITING)
                 .poll(poll)
                 .build();
 
-        return sessionRepository.save(session);
+        //Saves session first to get an id
+        session = sessionRepository.save(session);
+
+        //Adds presenter as a participant for history tracking
+        if (creatorUserId != null) {
+            Participant presenterParticipant = Participant.builder()
+                    .name("Presenter")
+                    .userId(creatorUserId)
+                    .joinedAt(Instant.now())
+                    .session(session)
+                    .build();
+            session.addParticipant(presenterParticipant);
+            session = sessionRepository.save(session);
+        }
+        return session;
     }
 
     // Gets session by code
@@ -119,6 +132,7 @@ public class SessionService {
 
     // Joins session as participant.
     public Map<String, Object> joinSession(String code, String displayName, Long userId) {
+        System.out.println("DEBUG joinSession: code=" + code + ", displayName=" + displayName + ", userId=" + userId);
         Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
 
         if (opt.isEmpty()) {
@@ -573,10 +587,24 @@ public class SessionService {
             questionsResults.add(qResult);
         }
 
+        // Calculate total score from selected options (including negative penalties)
+        int totalScore = 0;
+        for (Vote v : myVotes) {
+            if (v.getOption() != null) {
+                if (v.getOption().getValue() != null && v.getOption().getValue() != 0) {
+                    //adds the value (+ or -)
+                    totalScore += v.getOption().getValue();
+                } else if (v.getOption().getIsCorrect() != null && v.getOption().getIsCorrect()) {
+                    totalScore += 1;
+                }
+            }
+        }
+
         Map<String, Object> result = new HashMap<>();
         result.put("pollTitle", poll.getTitle());
         result.put("correctCount", correctCount);
         result.put("totalQuestions", poll.getQuestions().size());
+        result.put("score", totalScore);
         result.put("questions", questionsResults);
 
         return result;

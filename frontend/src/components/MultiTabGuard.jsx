@@ -45,20 +45,11 @@ function MultiTabGuard({ children }) {
         return PUBLIC_PATHS.some(p => path === p || path.startsWith(p + '/'))
     }, [location.pathname])
 
-    //Gets the effective email for this tab, only use sessionStorage, (it's what THIS tab logged in with)
+    //Gets the effective email for this tab - only use sessionStorage (what THIS tab explicitly logged in with)
+    //This ensures tabs don't inherit emails from other tabs via shared localStorage
     const getEffectiveEmail = useCallback(() => {
-        //Only use sessionStorage, the email this tab explicitly logged in with
-        const sessionEmail = getSessionEmail()
-        if (sessionEmail) return sessionEmail
-
-        //If no session email but we're on an authenticated page, checks localStorage to see if we should inherit the auth
-        if (!isPublicPath()) {
-            const localEmail = getLocalStorageEmail()
-            return localEmail
-        }
-
-        return null
-    }, [isPublicPath])
+        return getSessionEmail()
+    }, [])
 
     //Checks if another tab with same email is alive
     const isOtherTabAlive = useCallback((email) => {

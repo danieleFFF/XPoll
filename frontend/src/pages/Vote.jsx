@@ -27,8 +27,8 @@ function Vote() {
 
             const storageKey = `xpoll_participant_${code.toUpperCase()}`
             console.log('Vote: Looking for storage key:', storageKey)
-            //checks localStorage first for logged users, then sessionStorage for guests
-            const storedName = getCurrentUser() ? localStorage.getItem(storageKey) : sessionStorage.getItem(storageKey)
+            //Uses sessionStorage for all users (per-tab isolation)
+            const storedName = sessionStorage.getItem(storageKey)
             console.log('Vote: storedName found:', storedName)
             if (storedName) {
                 setParticipantName(storedName)
@@ -235,8 +235,8 @@ function Vote() {
                             <h1 className="text-2xl font-bold text-on-primary mb-2">{myResults.pollTitle}</h1>
                             <div className="flex justify-center items-center gap-4">
                                 <div className="bg-primary/20 rounded-lg p-4">
-                                    <p className="text-4xl font-bold text-primary">{myResults.correctCount}/{myResults.totalQuestions}</p>
-                                    <p className="text-primary-container text-sm">Correct answers</p>
+                                    <p className="text-4xl font-bold text-primary">{myResults.score ?? 0} pts</p>
+                                    <p className="text-primary-container text-sm">Your score</p>
                                 </div>
                             </div>
                         </div>

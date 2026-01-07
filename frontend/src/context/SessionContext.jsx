@@ -222,7 +222,11 @@ export function SessionProvider({ children }) {
             if (storedUser) {
                 try {
                     const user = JSON.parse(storedUser);
-                    userId = user?.user?.id || user?.id || null;
+                    const rawId = user?.user?.id || user?.id;
+                    //converts to number if present, otherwise null
+                    userId = rawId ? Number(rawId) : null;
+                    //Validates it's a valid number
+                    if(isNaN(userId)) userId = null;
                 } catch (e) {
                     console.error('Error parsing user from localStorage', e);
                 }

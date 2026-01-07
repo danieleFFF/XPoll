@@ -50,9 +50,16 @@ public class UserController {
     // Get participation history for current user.
     @GetMapping("/me/participations")
     public ResponseEntity<List<ParticipationResponse>> getParticipations() {
+        System.out.println("DEBUG getParticipations called");
+
         return userService.getCurrentUser()
-                .map(user -> ResponseEntity.ok(userService.getUserParticipations(user.getId())))
-                .orElse(ResponseEntity.notFound().build());
+                .map(user -> {
+                    System.out.println("DEBUG getParticipations: user found with id=" + user.getId());
+                    return ResponseEntity.ok(userService.getUserParticipations(user.getId()));
+                }).orElseGet(() -> {
+                    System.out.println("DEBUG getParticipations: no user found");
+                    return ResponseEntity.notFound().build();
+                });
     }
 
     private UserResponse toFullUserResponse(User user) {

@@ -28,7 +28,16 @@ public class SecurityConfig {
                                 .sessionManagement(session -> session
                                                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                                 .authorizeHttpRequests(auth -> auth
-                                                .anyRequest().permitAll())
+                                                .requestMatchers(
+                                                                "/",
+                                                                "/oauth2/**",
+                                                                "/login/oauth2/**",
+                                                                "/api/auth/**",
+                                                                "/api/public/**",
+                                                                "/api/sessions/**",
+                                                                "/ws/**")
+                                                .permitAll()
+                                                .anyRequest().authenticated())
                                 // Prevent redirect to OAuth for API calls - return 401 instead
                                 .exceptionHandling(exceptions -> exceptions
                                                 .authenticationEntryPoint((request, response, authException) -> {

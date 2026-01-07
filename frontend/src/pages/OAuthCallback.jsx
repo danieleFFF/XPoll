@@ -28,9 +28,9 @@ function OAuthCallback() {
                 // Store in the same format as email/password login
                 const userData = {
                     token: token,
-                    id: payload.sub, // JWT subject (user ID)
-                    email: payload.email || payload.sub,
-                    username: payload.username || payload.email || 'User'
+                    id: payload.userId, // JWT userId claim (numeric database ID)
+                    email: payload.sub, // JWT subject is the email
+                    username: payload.username || payload.sub || 'User'
                 }
 
                 localStorage.setItem('user', JSON.stringify(userData))

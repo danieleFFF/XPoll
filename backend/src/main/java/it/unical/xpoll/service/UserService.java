@@ -154,6 +154,15 @@ public class UserService {
     // Get participation history for a user.
     public List<ParticipationResponse> getUserParticipations(Long userId) {
         List<Participant> participations = participantRepository.findByUserId(userId);
+        System.out.println("DEBUG getUserParticipations: userId=" + userId + ", found " + participations.size() + " participations");
+
+        for(Participant p : participations){
+            boolean hasSession = p.getSession() != null;
+            boolean hasPoll = hasSession && p.getSession().getPoll() != null;
+            String state = hasSession ? String.valueOf(p.getSession().getState()) : "null";
+            List<Vote> votes = hasSession ? voteRepository.findBySessionIdAndParticipantId(p.getSession().getId(), p.getId())  : java.util.Collections.emptyList();
+            System.out.println("DEBUG: Participant '" + p.getName() + "' - hasSession=" + hasSession + ", hasPoll=" + hasPoll + ", state=" + state + ", votes=" + votes.size());
+        }
 
         return participations.stream()
                 .filter(p -> p.getSession() != null && p.getSession().getPoll() != null)
