@@ -102,11 +102,11 @@ public class UserService {
                 .build();
     }
 
-    //Update username for current user
+    // Update username for current user
     public User updateUsername(String newUsername) {
         User user = getCurrentUser().orElseThrow(() -> new RuntimeException("User not authenticated"));
 
-        //Check if username is already taken by another user.
+        // Check if username is already taken by another user.
         Optional<User> existingUser = userRepository.findByUsername(newUsername);
 
         if (existingUser.isPresent() && !existingUser.get().getId().equals(user.getId())) {
@@ -118,21 +118,21 @@ public class UserService {
         return userRepository.save(user);
     }
 
-    //Change password for LOCAL users only.
+    // Change password for LOCAL users only.
     public void changePassword(String currentPassword, String newPassword) {
         User user = getCurrentUser().orElseThrow(() -> new RuntimeException("User not authenticated"));
 
-        //Only local users can change password.
-        if(user.getAccessMode() != AccessMode.LOCAL) {
+        // Only local users can change password.
+        if (user.getAccessMode() != AccessMode.LOCAL) {
             throw new RuntimeException("Password change is only available for local accounts");
         }
 
-        //Verifies current password.
-        if(!passwordEncoder.matches(currentPassword, user.getPassword())) {
+        // Verifies current password.
+        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
             throw new RuntimeException("Current password is incorrect");
         }
 
-        //Validates new password (min 6 chars, at least one letter and one number).
+        // Validates new password (min 6 chars, at least one letter and one number).
         if (newPassword.length() < 6) {
             throw new RuntimeException("Password must be at least 6 characters");
         }
@@ -151,15 +151,16 @@ public class UserService {
         userRepository.save(user);
     }
 
-    //Get participation history for a user.
+    // Get participation history for a user.
     public List<ParticipationResponse> getUserParticipations(Long userId) {
         List<Participant> participations = participantRepository.findByUserId(userId);
 
         return participations.stream()
                 .filter(p -> p.getSession() != null && p.getSession().getPoll() != null)
-                //Only includes participations where the poll actually ended (not just joined lobby or in progress).
+                // Only includes participations where the poll actually ended (not just joined
+                // lobby or in progress).
                 .filter(p -> p.getSession().getState() == it.unical.xpoll.domain.SessionState.CLOSED)
-                //Only includes if participant actually submitted votes or is the presenter.
+                // Only includes if participant actually submitted votes or is the presenter.
                 .filter(p -> {
                     boolean isPresenter = p.getUserId() != null &&
                             p.getSession().getCreatorUserId() != null &&
@@ -167,13 +168,13 @@ public class UserService {
 
                     if (isPresenter)
                         return true;
-                    //Checks if participant submitted any votes
+                    // Checks if participant submitted any votes
                     List<Vote> votes = voteRepository.findBySessionIdAndParticipantId(p.getSession().getId(),
                             p.getId());
                     return !votes.isEmpty();
                 })
                 .map(p -> {
-                    //Checks if this participant is the presenter .
+                    // Checks if this participant is the presenter .
                     boolean isPresenter = p.getUserId() != null &&
                             p.getSession().getCreatorUserId() != null &&
                             p.getUserId().equals(p.getSession().getCreatorUserId());
@@ -183,7 +184,7 @@ public class UserService {
                     int score = 0;
                     Integer maxScore = 0;
 
-                    if (hasVoted){
+                    if (hasVoted) {
                         score = calculateScore(p);
                         maxScore = calculateMaxScore(p.getSession().getPoll());
                     }
@@ -200,7 +201,7 @@ public class UserService {
                             .totalTimeSeconds(p.getSession().getPoll().getTimeLimit())
                             .build();
                 })
-                //Sorts by participation date descending .
+                // Sorts by participation date descending .
                 .sorted((a, b) -> b.getParticipationDate().compareTo(a.getParticipationDate()))
                 .collect(Collectors.toList());
     }
@@ -212,20 +213,23 @@ public class UserService {
 
             boolean hasValues = q.getOptions().stream().anyMatch(o -> o.getValue() != null && o.getValue() > 0);
 
-            if (hasValues){
+            if (hasValues) {
                 if (q.getType() == it.unical.xpoll.domain.Question.QuestionType.MULTIPLE_CHOICE) {
                     questionMax = q.getOptions().stream()
                             .filter(o -> o.getValue() != null && o.getValue() > 0)
                             .mapToInt(it.unical.xpoll.domain.Option::getValue)
                             .sum();
-                }else {
+                } else {
                     questionMax = q.getOptions().stream()
                             .filter(o -> o.getValue() != null && o.getValue() > 0)
                             .mapToInt(it.unical.xpoll.domain.Option::getValue)
                             .max().orElse(0);
                 }
-            } else{
-                if(q.getCorrectAnswer() != null) {
+            } else {
+                // Check if any option is marked as correct
+                boolean hasCorrectAnswer = q.getOptions().stream()
+                        .anyMatch(o -> o.getIsCorrect() != null && o.getIsCorrect());
+                if (hasCorrectAnswer) {
                     questionMax = 1;
                 }
             }
@@ -234,36 +238,26 @@ public class UserService {
         return maxScore;
     }
 
-    //Calculate total score for a participant based on their votes.
+    // Calculate total score for a participant based on their votes.
     private int calculateScore(Participant participant) {
         List<Vote> votes = voteRepository.findBySessionIdAndParticipantId(participant.getSession().getId(),
                 participant.getId());
         int totalScore = 0;
 
-        for (Vote v : votes){
+        for (Vote v : votes) {
             if (v.getOption() == null || v.getQuestion() == null) {
                 continue;
             }
 
-            //Checks if option has explicit value/score.
+            // Checks if option has explicit value/score.
             if (v.getOption().getValue() != null && v.getOption().getValue() > 0) {
                 totalScore += v.getOption().getValue();
                 continue;
             }
 
-            //Otherwise checks if this is correct answer based on index.
-            Integer correctAnswerIndex = v.getQuestion().getCorrectAnswer();
-            if (correctAnswerIndex != null) {
-                List<Option> options = v.getQuestion().getOptions();
-                //finds the index of the selected option.
-                for (int i = 0; i < options.size(); i++) {
-                    if(options.get(i).getId().equals(v.getOption().getId())) {
-                        if(i == correctAnswerIndex) {
-                            totalScore += 1; // 1 point for correct answer.
-                        }
-                        break;
-                    }
-                }
+            // Otherwise checks if this option is marked as correct.
+            if (v.getOption().getIsCorrect() != null && v.getOption().getIsCorrect()) {
+                totalScore += 1; // 1 point for correct answer.
             }
         }
         return totalScore;

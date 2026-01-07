@@ -23,7 +23,6 @@ public class Question {
     @Builder.Default
     private List<Option> options = new ArrayList<>();
 
-    private Integer correctAnswer;
     @Column(nullable = false)
     private Integer orderIndex;
     @Enumerated(EnumType.STRING)

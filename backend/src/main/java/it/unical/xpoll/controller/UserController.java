@@ -1,7 +1,6 @@
 package it.unical.xpoll.controller;
 
 import it.unical.xpoll.dto.*;
-import it.unical.xpoll.model.AccessMode;
 import it.unical.xpoll.model.User;
 import it.unical.xpoll.service.UserService;
 import jakarta.validation.Valid;
@@ -18,7 +17,7 @@ import java.util.Map;
 public class UserController {
     private final UserService userService;
 
-    //Gets current user profile with all details
+    // Gets current user profile with all details
     @GetMapping("/me")
     public ResponseEntity<UserResponse> getCurrentUser() {
         return userService.getCurrentUser()
@@ -26,7 +25,7 @@ public class UserController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    //Updates current user's username.
+    // Updates current user's username.
     @PutMapping("/me/username")
     public ResponseEntity<?> updateUsername(@Valid @RequestBody UpdateUsernameRequest request) {
         try {
@@ -37,7 +36,7 @@ public class UserController {
         }
     }
 
-    //Change current user's password (LOCAL users only).
+    // Change current user's password (LOCAL users only).
     @PutMapping("/me/password")
     public ResponseEntity<?> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
         try {
@@ -48,10 +47,11 @@ public class UserController {
         }
     }
 
-    //Get participation history for current user.
+    // Get participation history for current user.
     @GetMapping("/me/participations")
     public ResponseEntity<List<ParticipationResponse>> getParticipations() {
-        return userService.getCurrentUser().map(user -> ResponseEntity.ok(userService.getUserParticipations(user.getId())))
+        return userService.getCurrentUser()
+                .map(user -> ResponseEntity.ok(userService.getUserParticipations(user.getId())))
                 .orElse(ResponseEntity.notFound().build());
     }
 

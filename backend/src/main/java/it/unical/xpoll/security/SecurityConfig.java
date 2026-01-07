@@ -16,6 +16,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.Arrays;
 import java.util.List;
 
@@ -44,7 +45,18 @@ public class SecurityConfig {
                                 "/api/sessions/**",
                                 "/ws/**")
                         .permitAll().anyRequest().authenticated())
-                // redirectToOAuth()
+                // Add exception handling to return 401 for API requests instead of redirecting
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            // For API requests, return 401 instead of redirecting to OAuth2
+                            if (request.getRequestURI().startsWith("/api/")) {
+                                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
+                            } else {
+                                // For non-API requests, redirect to OAuth2
+                                response.sendRedirect("/oauth2/authorization/google");
+                            }
+                        }))
+                // OAuth2 login for browser-based authentication
                 .oauth2Login(oauth2 -> oauth2
                         .successHandler(oAuth2SuccessHandler))
                 .addFilterBefore(jwtAuthenticationFilter,

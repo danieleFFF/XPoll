@@ -3,7 +3,6 @@ package it.unical.xpoll.service;
 import it.unical.xpoll.domain.*;
 import it.unical.xpoll.repository.*;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +19,7 @@ public class SessionService {
     private final ParticipantRepository participantRepository;
     private final QuestionRepository questionRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final PollRepository pollRepository;
     private final PollService pollService;
 
     private String generateCode() {
@@ -42,23 +42,70 @@ public class SessionService {
     public Session createSession(String creatorId, Long creatorUserId, String title, Integer timeLimit,
             List<Map<String, Object>> questionsData) {
 
-        // Creates draft poll (passing null for description)
-        Poll poll = pollService.createPoll(creatorId, title, null, timeLimit, false, false, true, questionsData);
-        // Publishes poll
-        poll = pollService.publishPoll(poll);
-
         Session session = Session.builder()
                 .code(generateCode())
                 .creatorId(creatorId)
                 .creatorUserId(creatorUserId)
-                .poll(poll)
-                .state(SessionState.WAITING)
                 .createdAt(Instant.now())
+                .state(SessionState.WAITING)
                 .build();
 
-        Session saved = sessionRepository.save(session);
+        Poll poll = Poll.builder()
+                .title(title)
+                .timeLimit(timeLimit)
+                .status(PollStatus.PUBLISHED)
+                .build();
 
-        return saved;
+        for (Map<String, Object> qData : questionsData) {
+            Question q = Question.builder()
+                    .text((String) qData.get("text"))
+                    .type(Question.QuestionType.valueOf((String) qData.getOrDefault("type", "SINGLE_CHOICE")))
+                    .build();
+
+            List<Map<String, Object>> opts = (List<Map<String, Object>>) qData.get("options");
+            for (Map<String, Object> oData : opts) {
+                Boolean isCorrect = oData.get("isCorrect") != null ? (Boolean) oData.get("isCorrect") : false;
+                Option o = Option.builder()
+                        .question(q)
+                        .text((String) oData.get("text"))
+                        .value((Integer) oData.get("value"))
+                        .isCorrect(isCorrect)
+                        .build();
+                q.addOption(o);
+            }
+            poll.addQuestion(q);
+        }
+        session.setPoll(poll);
+        return sessionRepository.save(session);
+    }
+
+    public Session createSessionFromPoll(Long pollId, String creatorId) {
+        Poll poll = pollRepository.findById(pollId)
+                .orElseThrow(() -> new RuntimeException("Poll not found"));
+
+        if (!poll.getCreatorId().equals(creatorId)) {
+            throw new RuntimeException("Unauthorized");
+        }
+
+        // Deep copy of poll is NOT needed if we just link it.
+        // However, if we want independent sessions that snapshot the poll state, we
+        // might considered it.
+        // For now, let's link the EXISTING poll to the session, as per Domain Model
+        // usually.
+        // Checking Domain Model: Session has @ManyToOne Poll. One poll can have
+        // multiple sessions.
+        // So we associate the existing poll.
+
+        Session session = Session.builder()
+                .code(generateCode())
+                .creatorId(creatorId)
+                // .creatorUserId() // Need to map if available
+                .createdAt(Instant.now())
+                .state(SessionState.WAITING)
+                .poll(poll)
+                .build();
+
+        return sessionRepository.save(session);
     }
 
     // Gets session by code
@@ -256,7 +303,7 @@ public class SessionService {
     }
 
     // Submits participant's votes
-    public boolean submitVotes(String code, String participantName, Map<String, Integer> answers) {
+    public boolean submitVotes(String code, String participantName, Map<String, Object> answers) {
         Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
 
         if (opt.isEmpty()) {
@@ -288,9 +335,9 @@ public class SessionService {
 
         try {
             List<Vote> votesToSave = new ArrayList<>();
-            for (Map.Entry<String, Integer> entry : answers.entrySet()) {
+            for (Map.Entry<String, Object> entry : answers.entrySet()) {
                 Long questionId = Long.valueOf(entry.getKey());
-                Integer optionIndex = entry.getValue();
+                Object answerValue = entry.getValue();
 
                 // Skips if already answered
                 if (answeredQuestionIds.contains(questionId)) {
@@ -302,17 +349,27 @@ public class SessionService {
                     continue;
                 }
 
-                if (optionIndex >= 0 && optionIndex < question.getOptions().size()) {
-                    Option selectedOption = question.getOptions().get(optionIndex);
+                // Handle both single selection (Integer) and multiple selection (List<Integer>)
+                List<Integer> optionIndices = new ArrayList<>();
+                if (answerValue instanceof Integer) {
+                    optionIndices.add((Integer) answerValue);
+                } else if (answerValue instanceof List) {
+                    optionIndices.addAll((List<Integer>) answerValue);
+                }
 
-                    Vote vote = Vote.builder()
-                            .session(session)
-                            .participant(participant)
-                            .question(question)
-                            .option(selectedOption)
-                            .submittedAt(Instant.now())
-                            .build();
-                    votesToSave.add(vote);
+                for (Integer optionIndex : optionIndices) {
+                    if (optionIndex >= 0 && optionIndex < question.getOptions().size()) {
+                        Option selectedOption = question.getOptions().get(optionIndex);
+
+                        Vote vote = Vote.builder()
+                                .session(session)
+                                .participant(participant)
+                                .question(question)
+                                .option(selectedOption)
+                                .submittedAt(Instant.now())
+                                .build();
+                        votesToSave.add(vote);
+                    }
                 }
             }
 
@@ -383,7 +440,7 @@ public class SessionService {
                         .filter(v -> v.getOption().getId().equals(option.getId()))
                         .count();
 
-                boolean isCorrect = question.getCorrectAnswer() != null && question.getCorrectAnswer() == i;
+                boolean isCorrect = option.getIsCorrect() != null && option.getIsCorrect();
 
                 optionResults.add(Map.of(
                         "id", option.getId(),
@@ -434,9 +491,10 @@ public class SessionService {
         List<Map<String, Object>> questionsResults = new ArrayList<>();
 
         for (Question question : poll.getQuestions()) {
-            Optional<Vote> voteOpt = myVotes.stream()
+            // Get all votes for this question from this participant
+            List<Vote> questionVotes = myVotes.stream()
                     .filter(v -> v.getQuestion().getId().equals(question.getId()))
-                    .findFirst();
+                    .toList();
 
             Map<String, Object> qResult = new HashMap<>();
             qResult.put("id", question.getId());
@@ -453,27 +511,43 @@ public class SessionService {
                     .collect(Collectors.toList());
             qResult.put("options", optionsDTO);
 
-            int selectedIndex = -1;
-            int correctAnswerIndex = question.getCorrectAnswer() != null ? question.getCorrectAnswer() : -1;
-
-            if (voteOpt.isPresent()) {
-                Vote vote = voteOpt.get();
+            // Get selected option indices
+            List<Integer> selectedIndices = new ArrayList<>();
+            for (Vote vote : questionVotes) {
                 for (int i = 0; i < question.getOptions().size(); i++) {
                     if (question.getOptions().get(i).getId().equals(vote.getOption().getId())) {
-                        selectedIndex = i;
+                        selectedIndices.add(i);
                         break;
                     }
                 }
-                boolean isCorrect = (selectedIndex != -1 && selectedIndex == correctAnswerIndex);
-                qResult.put("isCorrect", isCorrect);
-
-                if (isCorrect)
-                    correctCount++;
-            } else {
-                qResult.put("isCorrect", false);
             }
-            qResult.put("selectedIndex", selectedIndex);
-            qResult.put("correctAnswerIndex", correctAnswerIndex);
+
+            // Get correct answer indices
+            List<Integer> correctIndices = new ArrayList<>();
+            for (int i = 0; i < question.getOptions().size(); i++) {
+                Option option = question.getOptions().get(i);
+                if (option.getIsCorrect() != null && option.getIsCorrect()) {
+                    correctIndices.add(i);
+                }
+            }
+
+            // Check if answer is correct: must select ALL correct options and NO incorrect
+            // ones
+            boolean isCorrect = !selectedIndices.isEmpty() &&
+                    selectedIndices.size() == correctIndices.size() &&
+                    selectedIndices.containsAll(correctIndices);
+
+            qResult.put("isCorrect", isCorrect);
+            qResult.put("selectedIndices", selectedIndices); // Changed to list
+            qResult.put("correctIndices", correctIndices); // Changed to list
+
+            // For backward compatibility with single selection UI
+            qResult.put("selectedIndex", selectedIndices.isEmpty() ? -1 : selectedIndices.get(0));
+            qResult.put("correctAnswerIndex", correctIndices.isEmpty() ? -1 : correctIndices.get(0));
+
+            if (isCorrect)
+                correctCount++;
+
             questionsResults.add(qResult);
         }
 

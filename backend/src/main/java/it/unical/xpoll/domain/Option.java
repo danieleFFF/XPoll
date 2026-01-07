@@ -21,6 +21,8 @@ public class Option {
     @Builder.Default
     private Integer value = 0; // Score value
     @Builder.Default
+    private Boolean isCorrect = false; // Whether this option is a correct answer
+    @Builder.Default
     private Boolean isAIGenerated = false;
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "question_id")

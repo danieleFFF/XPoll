@@ -19,7 +19,9 @@ public class PollController {
     @PostMapping
     public ResponseEntity<?> createPoll(@RequestBody Map<String, Object> body) {
         try {
-            String creatorId = String.valueOf(body.get("creatorId"));
+            // Priority: Authenticated User ID > Body creatorId (fallback)
+            String creatorId = userService.getCurrentUser().map(u -> String.valueOf(u.getId()))
+                    .orElse(body.get("creatorId") != null ? String.valueOf(body.get("creatorId")) : null);
             String title = (String) body.get("title");
             String description = (String) body.get("description");
             Integer timeLimit = body.get("timeLimit") != null ? ((Number) body.get("timeLimit")).intValue() : null;
@@ -38,9 +40,15 @@ public class PollController {
     @PutMapping("/{id}")
     public ResponseEntity<?> updatePoll(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         try {
-            String title = (String) body.getOrDefault("title", "Untitled");
+            String title = (String) body.get("title");
+            String description = (String) body.get("description");
             Integer timeLimit = body.get("timeLimit") != null ? ((Number) body.get("timeLimit")).intValue() : null;
-            Poll updated = pollService.updatePoll(id, title, timeLimit);
+            Boolean hasScore = (Boolean) body.get("hasScore");
+            Boolean isAnonymous = (Boolean) body.get("isAnonymous");
+            Boolean showResults = (Boolean) body.get("showResults");
+            java.util.List<Map<String, Object>> questions = (java.util.List<Map<String, Object>>) body.get("questions");
+            Poll updated = pollService.updatePoll(id, title, description, timeLimit, hasScore, isAnonymous, showResults,
+                    questions);
             return ResponseEntity.ok(updated);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -57,7 +65,18 @@ public class PollController {
         }
     }
 
-    //Gets all polls created by the current user.
+    @GetMapping("/{id}")
+    public ResponseEntity<?> getPollById(@PathVariable Long id) {
+        try {
+            return pollService.getPollById(id)
+                    .map(ResponseEntity::ok)
+                    .orElse(ResponseEntity.notFound().build());
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // Gets all polls created by the current user.
     @GetMapping("/my-polls")
     public ResponseEntity<List<Poll>> getMyPolls() {
         return userService.getCurrentUser()
