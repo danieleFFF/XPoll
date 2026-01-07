@@ -4,39 +4,48 @@ import Navbar from '../components/Navbar.jsx'
 import DraftCard from '../components/DraftCard.jsx'
 import NewPollCard from '../components/NewPollCard.jsx'
 import { getCurrentUser, getMyParticipations } from '../services/AuthService.js'
-
-const drafts = [
-    { id: 1, title: 'Marketing Poll', questions: 5, createdAt: '15/12/2024' },
-    { id: 2, title: 'Team Building Poll', questions: 8, createdAt: '10/12/2024' },
-    { id: 3, title: 'Python Knowledge Poll', questions: 12, createdAt: '08/12/2024' }
-]
+import { getUserPolls } from '../services/PollService.js'
 
 function Dashboard() {
     const navigate = useNavigate()
     const location = useLocation()
     const [code, setCode] = useState('')
     const [user, setUser] = useState(null)
+    const [polls, setPolls] = useState([])
     const [participations, setParticipations] = useState([])
     const [loadingHistory, setLoadingHistory] = useState(false)
+    const [loadingPolls, setLoadingPolls] = useState(true)
     const [expandedParticipation, setExpandedParticipation] = useState(null)
 
     useEffect(() => {
         const currentUser = getCurrentUser()
-        if(!currentUser){
+        if (!currentUser) {
             navigate('/login')
-
             return
         }
         setUser(currentUser)
+        loadPolls()
         loadParticipationHistory()
 
         //Scrolls to history section
-        if(location.hash === '#history'){
+        if (location.hash === '#history') {
             setTimeout(() => {
                 document.getElementById('history')?.scrollIntoView({ behavior: 'smooth' })
             }, 100)
         }
     }, [location, navigate])
+
+    const loadPolls = async () => {
+        setLoadingPolls(true)
+        try {
+            const data = await getUserPolls()
+            setPolls(data)
+        } catch (err) {
+            console.error('Failed to load polls:', err)
+        } finally {
+            setLoadingPolls(false)
+        }
+    }
 
     const loadParticipationHistory = async () => {
         setLoadingHistory(true)
@@ -51,7 +60,7 @@ function Dashboard() {
     }
 
     const handleJoin = () => {
-        if(code.trim()){ navigate(`/lobby/${code.toUpperCase()}`) }
+        if (code.trim()) { navigate(`/lobby/${code.toUpperCase()}`) }
     }
 
     const formatDate = (dateString) => {
@@ -72,18 +81,27 @@ function Dashboard() {
                 { /* Drafts section */}
                 <section className="mb-12">
                     <h2 className="text-[28px] font-semibold mb-6 text-on-primary">
-                        Your Drafts
+                        Your Polls
                     </h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                        {drafts.map(draft => (
-                            <DraftCard
-                                key={draft.id} title={draft.title} questions={draft.questions}
-                                createdAt={draft.createdAt} onStart={() => navigate(`/master/${draft.id}`, { state: { draft } })} />
-                        ))}
-                        <Link to="/create">
-                            <NewPollCard />
-                        </Link>
-                    </div>
+                    {loadingPolls ? (
+                        <div className="text-primary-container">Loading polls...</div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                            {polls.map(poll => (
+                                <DraftCard
+                                    key={poll.id}
+                                    title={poll.title}
+                                    questions={poll.questions ? poll.questions.length : 0}
+                                    createdAt={poll.createdAt} // Ensure backend sends createdAt or handle undefined
+                                    onStart={() => navigate(`/poll-details/${poll.id}`)}
+                                    onEdit={() => navigate(`/edit-poll/${poll.id}`)}
+                                />
+                            ))}
+                            <Link to="/create">
+                                <NewPollCard />
+                            </Link>
+                        </div>
+                    )}
                 </section>
 
                 { /* Join quiz section */}
@@ -110,7 +128,7 @@ function Dashboard() {
                     </div>
                 </section>
 
-                { /* Participation History section*/ }
+                { /* Participation History section*/}
                 {user && (
                     <section id="history" className="mt-12">
                         <div className="mb-6">

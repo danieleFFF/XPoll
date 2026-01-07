@@ -9,6 +9,8 @@ import ResetPassword from './pages/ResetPassword.jsx'
 import OAuthCallback from './pages/OAuthCallback.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import CreatePoll from './pages/CreatePoll.jsx'
+import PollDetails from './pages/PollDetails.jsx'
+import EditPoll from './pages/EditPoll.jsx'
 import Lobby from './pages/Lobby.jsx'
 import Vote from './pages/Vote.jsx'
 import View from './pages/View.jsx'
@@ -29,6 +31,8 @@ function App() {
             <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/create" element={<CreatePoll />} />
+            <Route path="/poll-details/:id" element={<PollDetails />} />
+            <Route path="/edit-poll/:id" element={<EditPoll />} />
             <Route path="/lobby/:code" element={<Lobby />} />
             <Route path="/vote/:code" element={<Vote />} />
             <Route path="/view/:code" element={<View />} />

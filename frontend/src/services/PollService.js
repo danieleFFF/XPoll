@@ -81,9 +81,9 @@ export const getPollById = async (id) => {
     }
 };
 
-export const getUserPolls = async (userId) => {
+export const getUserPolls = async () => {
     try {
-        const response = await fetch(`${API_BASE_URL}/user/${userId}`, {
+        const response = await fetch(`${API_BASE_URL}/my-polls`, {
             method: 'GET',
             headers: getAuthHeaders(),
         });

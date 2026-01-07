@@ -1,12 +1,14 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar.jsx'
-import { createPoll, generatePollFromAI, generateAnswersFromAI } from '../services/PollService.js'
+import { getPollById, updatePoll, generateAnswersFromAI } from '../services/PollService.js'
 import { getCurrentUser } from '../services/AuthService.js'
 
-function CreatePoll() {
+function EditPoll() {
+    const { id } = useParams()
     const navigate = useNavigate()
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState('')
 
     // Poll metadata
@@ -18,23 +20,72 @@ function CreatePoll() {
     const [isAnonymous, setIsAnonymous] = useState(false)
     const [showResults, setShowResults] = useState(true)
 
-    // AI Generation
-    const [aiPrompt, setAiPrompt] = useState('')
-    const [isGeneratingAll, setIsGeneratingAll] = useState(false)
+    // AI Generation state for single questions
     const [generatingQuestionId, setGeneratingQuestionId] = useState(null)
 
     // Questions
-    const [questions, setQuestions] = useState([
-        {
-            id: 1,
-            text: '',
-            type: 'SINGLE_CHOICE',
-            options: [
-                { text: '', value: 0, isCorrect: false },
-                { text: '', value: 0, isCorrect: false }
-            ]
+    const [questions, setQuestions] = useState([])
+
+    useEffect(() => {
+        const currentUser = getCurrentUser()
+        if (!currentUser) {
+            navigate('/login')
+            return
         }
-    ])
+        loadPollData()
+    }, [id, navigate])
+
+    const loadPollData = async () => {
+        try {
+            const poll = await getPollById(id)
+
+            setTitle(poll.title)
+            setDescription(poll.description || '')
+
+            if (poll.timeLimit) {
+                setHours(Math.floor(poll.timeLimit / 3600))
+                setMinutes(Math.floor((poll.timeLimit % 3600) / 60))
+            } else {
+                setHours(0)
+                setMinutes(0)
+            }
+
+            setHasScore(poll.hasScore)
+            setIsAnonymous(poll.isAnonymous)
+            setShowResults(poll.showResults)
+
+            if (poll.questions && poll.questions.length > 0) {
+                // Map backend questions to frontend state format
+                const mappedQuestions = poll.questions.map(q => ({
+                    id: q.id || Date.now() + Math.random(), // Use existing ID or generate temp one
+                    text: q.text,
+                    type: q.type,
+                    correctAnswer: q.correctAnswer || 0,
+                    options: q.options.map(opt => ({
+                        id: opt.id,
+                        text: opt.text,
+                        value: opt.value || 0
+                    }))
+                }))
+                // Sort by order if available, or keep as is
+                setQuestions(mappedQuestions)
+            } else {
+                // Default empty question if none exist (shouldn't happen for valid poll)
+                setQuestions([{
+                    id: Date.now(),
+                    text: '',
+                    type: 'SINGLE_CHOICE',
+                    options: [{ text: '', value: 0 }, { text: '', value: 0 }],
+                    correctAnswer: 0
+                }])
+            }
+        } catch (err) {
+            console.error('Failed to load poll:', err)
+            setError('Failed to load poll data: ' + (err.message || 'Unknown error'))
+        } finally {
+            setIsLoading(false)
+        }
+    }
 
     const addQuestion = () => {
         setQuestions([
@@ -44,9 +95,10 @@ function CreatePoll() {
                 text: '',
                 type: 'SINGLE_CHOICE',
                 options: [
-                    { text: '', value: 0, isCorrect: false },
-                    { text: '', value: 0, isCorrect: false }
-                ]
+                    { text: '', value: 0 },
+                    { text: '', value: 0 }
+                ],
+                correctAnswer: 0
             }
         ])
     }
@@ -66,7 +118,7 @@ function CreatePoll() {
             if (q.id === questionId) {
                 return {
                     ...q,
-                    options: [...q.options, { text: '', value: 0, isCorrect: false }]
+                    options: [...q.options, { text: '', value: 0 }]
                 }
             }
             return q
@@ -77,7 +129,11 @@ function CreatePoll() {
         setQuestions(questions.map(q => {
             if (q.id === questionId && q.options.length > 2) {
                 const newOptions = q.options.filter((_, idx) => idx !== optionIndex)
-                return { ...q, options: newOptions }
+                let newCorrectAnswer = q.correctAnswer
+                if (optionIndex <= q.correctAnswer && q.correctAnswer > 0) {
+                    newCorrectAnswer = q.correctAnswer - 1
+                }
+                return { ...q, options: newOptions, correctAnswer: newCorrectAnswer }
             }
             return q
         }))
@@ -94,38 +150,6 @@ function CreatePoll() {
         }))
     }
 
-    // AI Generation handlers
-    const handleGenerateAll = async () => {
-        if (!aiPrompt.trim()) return
-        setIsGeneratingAll(true)
-        setError('')
-        try {
-            const generatedPoll = await generatePollFromAI(aiPrompt)
-
-            if (generatedPoll.title) setTitle(generatedPoll.title)
-            if (generatedPoll.description) setDescription(generatedPoll.description)
-
-            // Map generated questions to our state format
-            if (generatedPoll.questions && Array.isArray(generatedPoll.questions)) {
-                const mappedQuestions = generatedPoll.questions.map((q, index) => ({
-                    id: Date.now() + index,
-                    text: q.text,
-                    type: q.type || 'SINGLE_CHOICE',
-                    correctAnswer: q.correctAnswer || 0,
-                    options: q.options ? q.options.map(opt => ({
-                        text: opt.text,
-                        value: opt.value || 0
-                    })) : [{ text: '', value: 0 }, { text: '', value: 0 }]
-                }))
-                setQuestions(mappedQuestions)
-            }
-        } catch (err) {
-            setError('AI Generation Failed: ' + err.message)
-        } finally {
-            setIsGeneratingAll(false)
-        }
-    }
-
     const handleGenerateAnswers = async (questionId) => {
         const question = questions.find(q => q.id === questionId)
         if (!question?.text.trim()) return
@@ -135,7 +159,6 @@ function CreatePoll() {
         try {
             const response = await generateAnswersFromAI(question.text)
 
-            // Backend returns { options: [...] }
             if (response && response.options && Array.isArray(response.options)) {
                 const mappedOptions = response.options.map(ans => ({
                     text: ans.text,
@@ -162,16 +185,9 @@ function CreatePoll() {
         setIsSubmitting(true)
 
         try {
-            const user = getCurrentUser()
-            if (!user) {
-                throw new Error('You must be logged in to create a poll')
-            }
-
-            // Convert hours:minutes to seconds
             const timeLimit = (hours * 3600) + (minutes * 60)
 
             const pollData = {
-                creatorId: user.id || user.userId,
                 title,
                 description,
                 timeLimit,
@@ -191,13 +207,25 @@ function CreatePoll() {
                 }))
             }
 
-            await createPoll(pollData)
-            navigate('/dashboard')
+            await updatePoll(id, pollData)
+            navigate(`/poll-details/${id}`)
+            // navigate('/dashboard') // Or back to dashboard
         } catch (err) {
-            setError(err.message || 'Failed to create poll')
+            setError(err.message || 'Failed to update poll')
         } finally {
             setIsSubmitting(false)
         }
+    }
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen">
+                <Navbar />
+                <main className="max-w-[900px] mx-auto px-5 py-10 text-center text-on-primary">
+                    Loading poll data...
+                </main>
+            </div>
+        )
     }
 
     return (
@@ -205,9 +233,9 @@ function CreatePoll() {
             <Navbar />
             <main className="max-w-[900px] mx-auto px-5 py-10">
                 <div className="flex items-center justify-between mb-8">
-                    <h1 className="text-3xl font-bold text-on-primary">Create New Poll</h1>
-                    <Link to="/dashboard" className="text-primary hover:underline">
-                        ← Back
+                    <h1 className="text-3xl font-bold text-on-primary">Edit Poll</h1>
+                    <Link to={`/poll-details/${id}`} className="text-primary hover:underline">
+                        ← Cancel
                     </Link>
                 </div>
 
@@ -312,31 +340,6 @@ function CreatePoll() {
                         </div>
                     </div>
 
-                    {/* AI Generation Card */}
-                    <div className="bg-surface rounded-card p-6 mb-6 shadow-[0_4px_6px_rgba(0,0,0,0.2)]">
-                        <h2 className="text-lg font-semibold text-primary mb-3">✨ Generate with AI</h2>
-                        <div className="flex gap-3">
-                            <input
-                                type="text"
-                                value={aiPrompt}
-                                onChange={(e) => setAiPrompt(e.target.value)}
-                                className="flex-1 py-3 px-4 rounded-btn bg-primary-container/10 border-2 border-primary-container text-on-primary outline-none transition-all duration-200 focus:border-primary"
-                                placeholder="Describe your quiz topic (e.g., 'A quiz about Italian Renaissance art')"
-                            />
-                            <button
-                                type="button"
-                                onClick={handleGenerateAll}
-                                disabled={!aiPrompt.trim() || isGeneratingAll}
-                                className="px-6 py-3 rounded-btn bg-primary text-on-primary font-medium transition-all hover:bg-[#527d91] disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {isGeneratingAll ? 'Generating...' : 'Generate All'}
-                            </button>
-                        </div>
-                        <p className="text-xs text-primary-container mt-2">
-                            This will generate all questions and answers based on your prompt
-                        </p>
-                    </div>
-
                     {/* Questions Section */}
                     <h2 className="text-xl font-semibold text-primary mb-4">Questions</h2>
 
@@ -348,8 +351,7 @@ function CreatePoll() {
                                     <select
                                         value={question.type}
                                         onChange={(e) => updateQuestion(question.id, 'type', e.target.value)}
-                                        className="py-2 px-3 rounded-btn bg-[#203452] border border-primary-container text-on-primary text-sm outline-none focus:border-primary cursor-pointer appearance-none"
-                                        style={{ backgroundImage: 'none' }}
+                                        className="py-2 px-3 rounded-btn bg-primary-container/10 border border-primary-container text-on-primary text-sm outline-none focus:border-primary"
                                     >
                                         <option value="SINGLE_CHOICE">Single Choice</option>
                                         <option value="MULTIPLE_CHOICE">Multiple Choice</option>
@@ -392,38 +394,14 @@ function CreatePoll() {
                             <div className="space-y-3">
                                 {question.options.map((option, oIndex) => (
                                     <div key={oIndex} className="flex items-center gap-2">
-                                        {question.type === 'MULTIPLE_CHOICE' ? (
-                                            <input
-                                                type="checkbox"
-                                                checked={option.isCorrect || false}
-                                                onChange={(e) => updateOption(question.id, oIndex, 'isCorrect', e.target.checked)}
-                                                className="w-4 h-4 accent-primary flex-shrink-0"
-                                                title="Mark as correct answer"
-                                            />
-                                        ) : (
-                                            <input
-                                                type="radio"
-                                                name={`correct-${question.id}`}
-                                                checked={option.isCorrect || false}
-                                                onChange={() => {
-                                                    // For single choice, uncheck all others and check this one
-                                                    setQuestions(questions.map(q => {
-                                                        if (q.id === question.id) {
-                                                            return {
-                                                                ...q,
-                                                                options: q.options.map((opt, idx) => ({
-                                                                    ...opt,
-                                                                    isCorrect: idx === oIndex
-                                                                }))
-                                                            }
-                                                        }
-                                                        return q
-                                                    }))
-                                                }}
-                                                className="w-4 h-4 accent-primary flex-shrink-0"
-                                                title="Mark as correct answer"
-                                            />
-                                        )}
+                                        <input
+                                            type="radio"
+                                            name={`correct-${question.id}`}
+                                            checked={question.correctAnswer === oIndex}
+                                            onChange={() => updateQuestion(question.id, 'correctAnswer', oIndex)}
+                                            className="w-4 h-4 accent-primary flex-shrink-0"
+                                            title="Mark as correct answer"
+                                        />
 
                                         <input
                                             type="text"
@@ -466,10 +444,6 @@ function CreatePoll() {
                             >
                                 + Add Option
                             </button>
-
-                            <p className="text-xs text-primary-container mt-3">
-                                Select the radio button to indicate the correct answer
-                            </p>
                         </div>
                     ))}
 
@@ -488,7 +462,7 @@ function CreatePoll() {
                         disabled={isSubmitting}
                         className="w-full py-4 rounded-btn font-semibold text-lg text-on-primary bg-primary transition-all duration-200 hover:bg-[#527d91] hover:-translate-y-0.5 hover:shadow-[0_4px_8px_rgba(98,151,177,0.3)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                     >
-                        {isSubmitting ? 'Creating Poll...' : 'Save Poll'}
+                        {isSubmitting ? 'Saving Changes...' : 'Update Poll'}
                     </button>
                 </form>
             </main>
@@ -496,4 +470,4 @@ function CreatePoll() {
     )
 }
 
-export default CreatePoll
+export default EditPoll

@@ -17,7 +17,7 @@ const USER_ID_KEY = 'xpoll_user_id'
 const getUserId = () => {
     let userId = localStorage.getItem(USER_ID_KEY)
 
-    if(!userId){
+    if (!userId) {
         userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9)
         localStorage.setItem(USER_ID_KEY, userId)
     }
@@ -25,7 +25,7 @@ const getUserId = () => {
 }
 
 //Handles session's life cycle.
-export function SessionProvider({ children }){
+export function SessionProvider({ children }) {
     const [currentSession, setCurrentSession] = useState(null)
     const stompClientRef = useRef(null)
     const subscriptionRef = useRef(null)
@@ -35,7 +35,7 @@ export function SessionProvider({ children }){
         try {
             const response = await fetch(`${API_URL}/sessions/${code}`)
 
-            if (response.ok){
+            if (response.ok) {
                 const session = await response.json()
                 setCurrentSession(session)
 
@@ -76,14 +76,15 @@ export function SessionProvider({ children }){
             case 'PARTICIPANT_LEFT':
                 //forces state update.
                 fetchSession(code).then(session => {
-                    if(session) setCurrentSession(session) })
+                    if (session) setCurrentSession(session)
+                })
                 break
         }
     }, [fetchSession])
 
     //Connects to Websocket for a specific session.
-    const connectWebSocket = useCallback((code) =>{
-        if(stompClientRef.current?.connected){
+    const connectWebSocket = useCallback((code) => {
+        if (stompClientRef.current?.connected) {
             stompClientRef.current.deactivate()
         }
 
@@ -112,8 +113,8 @@ export function SessionProvider({ children }){
     //Cleans websocket when needed (like closing the browser).
     useEffect(() => {
         return () => {
-            if (subscriptionRef.current) {subscriptionRef.current.unsubscribe()}
-            if(stompClientRef.current?.connected) { stompClientRef.current.deactivate() }
+            if (subscriptionRef.current) { subscriptionRef.current.unsubscribe() }
+            if (stompClientRef.current?.connected) { stompClientRef.current.deactivate() }
         }
     }, [])
 
@@ -123,7 +124,7 @@ export function SessionProvider({ children }){
             //Gets logged user's database id if available.
             let creatorUserId = null;
             const storedUser = localStorage.getItem('user');
-            if (storedUser){
+            if (storedUser) {
                 try {
                     const user = JSON.parse(storedUser);
                     creatorUserId = user?.user?.id || user?.id || null;
@@ -162,7 +163,7 @@ export function SessionProvider({ children }){
     const getSession = useCallback(async (code) => {
         const normalizedCode = code.toUpperCase()
         const session = await fetchSession(normalizedCode)
-        if(session) { connectWebSocket(normalizedCode) }
+        if (session) { connectWebSocket(normalizedCode) }
         return session
     }, [fetchSession, connectWebSocket])
 
@@ -172,7 +173,7 @@ export function SessionProvider({ children }){
         const creatorId = getUserId()
         const session = await fetchSession(normalizedCode)
 
-        if (session && session.creatorId === creatorId){
+        if (session && session.creatorId === creatorId) {
             connectWebSocket(normalizedCode)
 
             return session
@@ -187,7 +188,7 @@ export function SessionProvider({ children }){
             let userId = null;
             const storedUser = localStorage.getItem('user');
 
-            if(storedUser){
+            if (storedUser) {
                 try {
                     const user = JSON.parse(storedUser);
                     userId = user?.user?.id || user?.id || null;
@@ -204,7 +205,7 @@ export function SessionProvider({ children }){
 
             const result = await response.json()
 
-            if(result.success){
+            if (result.success) {
                 const session = await fetchSession(code)
                 connectWebSocket(code)
 
@@ -227,7 +228,7 @@ export function SessionProvider({ children }){
                 body: JSON.stringify({ creatorId: getUserId() })
             })
 
-            if(response.ok){
+            if (response.ok) {
                 await fetchSession(code)
 
                 return true
@@ -248,7 +249,7 @@ export function SessionProvider({ children }){
                 body: JSON.stringify({ creatorId: getUserId() })
             })
 
-            if(response.ok){
+            if (response.ok) {
                 await fetchSession(code)
 
                 return true
@@ -269,7 +270,7 @@ export function SessionProvider({ children }){
                 body: JSON.stringify({ creatorId: getUserId() })
             })
 
-            if (response.ok)  {
+            if (response.ok) {
                 await fetchSession(code)
 
                 return true
@@ -313,9 +314,9 @@ export function SessionProvider({ children }){
                 body: JSON.stringify({ creatorId: getUserId() })
             })
 
-            if(response.ok){
+            if (response.ok) {
                 setCurrentSession(null)
-                if (subscriptionRef.current) { subscriptionRef.current.unsubscribe()}
+                if (subscriptionRef.current) { subscriptionRef.current.unsubscribe() }
                 if (stompClientRef.current?.connected) { stompClientRef.current.deactivate() }
 
                 return true
@@ -349,7 +350,7 @@ export function SessionProvider({ children }){
     const getRemainingTime = useCallback(async (code) => {
         try {
             const response = await fetch(`${API_URL}/sessions/${code}/time`)
-            if (response.ok){
+            if (response.ok) {
                 const data = await response.json()
 
                 return data.remainingTime
@@ -376,7 +377,7 @@ export function SessionProvider({ children }){
         try {
             const response = await fetch(`${API_URL}/sessions/${code}/results`)
 
-            if(response.ok) { return await response.json() }
+            if (response.ok) { return await response.json() }
 
             return null
         } catch (error) {

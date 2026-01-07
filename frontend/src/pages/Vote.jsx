@@ -30,7 +30,7 @@ function Vote() {
             //checks localStorage first for logged users, then sessionStorage for guests
             const storedName = getCurrentUser() ? localStorage.getItem(storageKey) : sessionStorage.getItem(storageKey)
             console.log('Vote: storedName found:', storedName)
-            if(storedName){
+            if (storedName) {
                 setParticipantName(storedName)
 
                 //Loads submitted state from localStorage
@@ -52,7 +52,7 @@ function Vote() {
             const savedAnswers = localStorage.getItem(answersKey)
             console.log('Vote: savedAnswers found:', savedAnswers)
 
-            if (savedAnswers){
+            if (savedAnswers) {
                 const parsed = JSON.parse(savedAnswers)
                 console.log('Vote: Loaded answers from localStorage:', parsed)
                 setAnswers(parsed)
@@ -71,13 +71,13 @@ function Vote() {
 
     //Updates timer and auto-submits when timer end.
     useEffect(() => {
-        if(session?.state === SESSION_STATES.OPEN && !submitted){
+        if (session?.state === SESSION_STATES.OPEN && !submitted) {
             const interval = setInterval(() => {
                 const remaining = calculateRemainingTime(session)
                 setTimeLeft(remaining)
 
                 //Auto-submit when timer ends if has answers.
-                if(remaining <= 0 && !submitted && Object.keys(answersRef.current).length > 0) {
+                if (remaining <= 0 && !submitted && Object.keys(answersRef.current).length > 0) {
                     handleSubmit()
                 }
             }, 1000)
@@ -90,7 +90,7 @@ function Vote() {
         if (session?.state === SESSION_STATES.CLOSED && !submitted) {
             if (Object.keys(answersRef.current).length > 0) {
                 handleSubmit()
-            }else {
+            } else {
                 setSubmitted(true)
             }
         }
@@ -119,16 +119,33 @@ function Vote() {
     }
 
     //Handles answer selection with toggle to deselect.
-    const handleSelectAnswer = (questionId, optionIndex) => {
+    const handleSelectAnswer = (questionId, optionIndex, questionType) => {
         if (!submitted && session?.state === SESSION_STATES.OPEN) {
-            let newAnswers
+            let newAnswers = { ...answersRef.current }
 
-            //Toggle: clicking same answer deselects it.
-            if (answersRef.current[questionId] === optionIndex) {
-                newAnswers = { ...answersRef.current }
-                delete newAnswers[questionId]
+            if (questionType === 'MULTIPLE_CHOICE') {
+                // For multiple choice, use an array
+                const currentSelections = Array.isArray(newAnswers[questionId]) ? newAnswers[questionId] : []
+
+                if (currentSelections.includes(optionIndex)) {
+                    // Remove if already selected
+                    const updated = currentSelections.filter(idx => idx !== optionIndex)
+                    if (updated.length === 0) {
+                        delete newAnswers[questionId]
+                    } else {
+                        newAnswers[questionId] = updated
+                    }
+                } else {
+                    // Add to selections
+                    newAnswers[questionId] = [...currentSelections, optionIndex]
+                }
             } else {
-                newAnswers = { ...answersRef.current, [questionId]: optionIndex}
+                // For single choice, use a single value
+                if (newAnswers[questionId] === optionIndex) {
+                    delete newAnswers[questionId]
+                } else {
+                    newAnswers[questionId] = optionIndex
+                }
             }
 
             answersRef.current = newAnswers
@@ -154,7 +171,7 @@ function Vote() {
     const getAnsweredCount = () => Object.keys(answers).length
 
     //Loading state.
-    if(loading){
+    if (loading) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center px-5 py-10">
                 <div className="text-primary-container">Loading...</div>
@@ -184,7 +201,7 @@ function Vote() {
     }
 
     //Waiting state.
-    if(session.state === SESSION_STATES.WAITING){
+    if (session.state === SESSION_STATES.WAITING) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center px-5 py-10">
                 <div className="text-center">
@@ -202,16 +219,16 @@ function Vote() {
     //Closed state.
     if (session.state === SESSION_STATES.CLOSED) {
         //Creator clicked show results - display personalized results.
-        if(session.resultsShown && myResults){
+        if (session.resultsShown && myResults) {
             return (
                 <div className="min-h-screen flex flex-col">
-                    { /* Header */ }
+                    { /* Header */}
                     <div className="bg-surface p-4 flex items-center justify-between sticky top-0 z-10 shadow-md">
                         <span className="text-primary font-bold text-lg">XPoll</span>
                         <span className="text-primary-container text-sm">Your Results</span>
                     </div>
 
-                    { /*Results*/ }
+                    { /*Results*/}
                     <div className="flex-1 p-5 max-w-2xl mx-auto w-full">
                         {/* Score header */}
                         <div className="text-center mb-8">
@@ -224,7 +241,7 @@ function Vote() {
                             </div>
                         </div>
 
-                        { /* Questions with corrections */ }
+                        { /* Questions with corrections */}
                         <div className="space-y-6">
                             {myResults.questions.map((question, qIndex) => (
                                 <div key={question.id} className={`bg-surface rounded-card p-6 shadow-[0_4px_6px_rgba(0,0,0,0.2)] border-l-4 ${question.isCorrect ? 'border-green-500' : 'border-red-500'}`}>
@@ -243,7 +260,7 @@ function Vote() {
                                             const isCorrectAnswer = question.correctAnswerIndex === oIndex
                                             let bgClass = 'border-primary-container/30'
 
-                                            if(isCorrectAnswer){
+                                            if (isCorrectAnswer) {
                                                 bgClass = 'border-green-500 bg-green-500/10'
                                             } else if (isSelected && !isCorrectAnswer) {
                                                 bgClass = 'border-red-500 bg-red-500/10'
@@ -260,12 +277,12 @@ function Vote() {
                                                         </div>
                                                         <div className="flex gap-2"> {isSelected && (
                                                             <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
-                                                                    Your answer
-                                                                </span>
+                                                                Your answer
+                                                            </span>
                                                         )} {isCorrectAnswer && (
                                                             <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
-                                                                    ✓ Correct
-                                                                </span>
+                                                                ✓ Correct
+                                                            </span>
                                                         )}
                                                         </div>
                                                     </div>
@@ -277,7 +294,7 @@ function Vote() {
                             ))}
                         </div>
 
-                        { /* Thank you message */ }
+                        { /* Thank you message */}
                         <div className="text-center mt-8 p-6 bg-surface rounded-card">
                             <p className="text-on-primary text-lg font-semibold mb-4">
                                 Thanks for participating! 🎉
@@ -395,7 +412,7 @@ function Vote() {
                 </div>
             </div>
 
-            { /* Questions */ }
+            { /* Questions */}
             <div className="flex-1 p-5 max-w-2xl mx-auto w-full">
                 <div className="space-y-6">
                     {session.questions?.map((question, qIndex) => (
@@ -410,25 +427,39 @@ function Vote() {
                             </div>
 
                             <div className="space-y-2 ml-10">
-                                {question.options?.map((option, oIndex) => (
-                                    <button key={option.id || oIndex} onClick={() => handleSelectAnswer(question.id, oIndex)} disabled={submitted}
-                                            className={`w-full text-left p-3 rounded-lg border-2 transition-all duration-200 ${answers[question.id] === oIndex ? 'border-primary bg-primary/10 text-on-primary' : 'border-primary-container/30 hover:border-primary-container hover:bg-primary-container/5 text-on-primary'} ${submitted ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
-                                        <div className="flex items-center gap-3">
-                                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${answers[question.id] === oIndex ? 'border-primary bg-primary' : 'border-primary-container'}`}>
-                                                {answers[question.id] === oIndex && (
-                                                    <span className="w-2 h-2 bg-white rounded-full"></span>
-                                                )}
-                                            </span>
-                                            <span>{option.text}</span>
-                                        </div>
-                                    </button>
-                                ))}
+                                {question.options?.map((option, oIndex) => {
+                                    const isSelected = Array.isArray(answers[question.id])
+                                        ? answers[question.id].includes(oIndex)
+                                        : answers[question.id] === oIndex
+
+                                    return (
+                                        <button key={option.id || oIndex} onClick={() => handleSelectAnswer(question.id, oIndex, question.type)} disabled={submitted}
+                                            className={`w-full text-left p-3 rounded-lg border-2 transition-all duration-200 ${isSelected ? 'border-primary bg-primary/10 text-on-primary' : 'border-primary-container/30 hover:border-primary-container hover:bg-primary-container/5 text-on-primary'} ${submitted ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                                            <div className="flex items-center gap-3">
+                                                <span className={`w-5 h-5 ${question.type === 'MULTIPLE_CHOICE' ? 'rounded-md' : 'rounded-full'} border-2 flex items-center justify-center ${isSelected ? 'border-primary bg-primary' : 'border-primary-container'}`}>
+                                                    {isSelected && (
+                                                        question.type === 'MULTIPLE_CHOICE' ? (
+                                                            // Checkmark for multiple choice
+                                                            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                            </svg>
+                                                        ) : (
+                                                            // Dot for single choice
+                                                            <span className="w-2 h-2 bg-white rounded-full"></span>
+                                                        )
+                                                    )}
+                                                </span>
+                                                <span>{option.text}</span>
+                                            </div>
+                                        </button>
+                                    )
+                                })}
                             </div>
                         </div>
                     ))}
                 </div>
 
-                { /*Submit button*/ }
+                { /*Submit button*/}
                 <div className="mt-8 text-center">
                     <button onClick={handleSubmit} disabled={getAnsweredCount() === 0} className="py-3 px-8 rounded-btn font-semibold text-on-primary bg-primary cursor-pointer transition-all duration-200 hover:bg-[#527d91] hover:-translate-y-0.5 hover:shadow-[0_4px_8px_rgba(98,151,177,0.3)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0">
                         Submit Answers ({getAnsweredCount()}/{session.questions?.length || 0})
