@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 
 /**
  * OAuth callback page that handles the redirect from Google OAuth.
- * Extracts the JWT token from URL and stores it.
+ * Extracts the JWT token from URL and stores it in the same format as email/password login.
  */
 function OAuthCallback() {
     const navigate = useNavigate()
@@ -13,11 +13,34 @@ function OAuthCallback() {
         const token = searchParams.get('token')
 
         if (token) {
-            // Store the JWT token
-            localStorage.setItem('token', token)
+            try {
+                // Decode JWT to get user info (payload is the second part of the JWT)
+                const base64Url = token.split('.')[1]
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+                const jsonPayload = decodeURIComponent(
+                    atob(base64)
+                        .split('')
+                        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                        .join('')
+                )
+                const payload = JSON.parse(jsonPayload)
 
-            // Redirect to dashboard
-            navigate('/dashboard', { replace: true })
+                // Store in the same format as email/password login
+                const userData = {
+                    token: token,
+                    id: payload.sub, // JWT subject (user ID)
+                    email: payload.email || payload.sub,
+                    username: payload.username || payload.email || 'User'
+                }
+
+                localStorage.setItem('user', JSON.stringify(userData))
+
+                // Redirect to dashboard
+                navigate('/dashboard', { replace: true })
+            } catch (error) {
+                console.error('Failed to parse JWT token:', error)
+                navigate('/', { replace: true })
+            }
         } else {
             // No token received, redirect to home with error
             navigate('/', { replace: true })

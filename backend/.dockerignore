@@ -1,0 +1,33 @@
+#Build artifacts
+target/
+*.jar
+*.war
+*.class
+
+#IDE files
+.idea/
+*.iml
+.vscode/
+
+
+#Git
+.git/
+.gitignore
+
+#Logs
+*.log
+
+#Environment files
+.env
+.env.*
+
+#OS files
+.DS_Store
+Thumbs.db
+
+#Test files
+src/test/
+
+#Documentation
+HELP.md
+README.md

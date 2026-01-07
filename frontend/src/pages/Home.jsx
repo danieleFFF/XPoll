@@ -54,7 +54,7 @@ function Home() {
                 </div>
                 {/* Google Login */}
                 <a
-                    href="http://localhost:8080/oauth2/authorization/google"
+                    href={`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/oauth2/authorization/google`}
                     className="w-full py-3 px-5 mb-4 rounded-btn font-medium text-base bg-white text-gray-700 flex items-center justify-center gap-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
                 >
                     <svg className="w-5 h-5" viewBox="0 0 24 24">
