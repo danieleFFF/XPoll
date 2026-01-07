@@ -256,8 +256,12 @@ function Vote() {
 
                                     <div className="space-y-2 ml-10">
                                         {question.options.map((option, oIndex) => {
-                                            const isSelected = question.selectedIndex === oIndex
-                                            const isCorrectAnswer = question.correctAnswerIndex === oIndex
+                                            // Use arrays for multiple choice, fallback to single index for backwards compatibility
+                                            const selectedIndices = question.selectedIndices || (question.selectedIndex >= 0 ? [question.selectedIndex] : [])
+                                            const correctIndices = question.correctIndices || (question.correctAnswerIndex >= 0 ? [question.correctAnswerIndex] : [])
+                                            const isSelected = selectedIndices.includes(oIndex)
+                                            const isCorrectAnswer = correctIndices.includes(oIndex)
+                                            const isMultipleChoice = question.type === 'MULTIPLE_CHOICE'
                                             let bgClass = 'border-primary-container/30'
 
                                             if (isCorrectAnswer) {
@@ -270,8 +274,16 @@ function Vote() {
                                                 <div key={option.id || oIndex} className={`p-3 rounded-lg border-2 ${bgClass}`}>
                                                     <div className="flex items-center justify-between">
                                                         <div className="flex items-center gap-3">
-                                                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-primary bg-primary' : 'border-primary-container'}`}>
-                                                                {isSelected && <span className="w-2 h-2 bg-white rounded-full"></span>}
+                                                            <span className={`w-5 h-5 ${isMultipleChoice ? 'rounded-md' : 'rounded-full'} border-2 flex items-center justify-center ${isSelected ? 'border-primary bg-primary' : 'border-primary-container'}`}>
+                                                                {isSelected && (
+                                                                    isMultipleChoice ? (
+                                                                        <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                                        </svg>
+                                                                    ) : (
+                                                                        <span className="w-2 h-2 bg-white rounded-full"></span>
+                                                                    )
+                                                                )}
                                                             </span>
                                                             <span className="text-on-primary">{option.text}</span>
                                                         </div>

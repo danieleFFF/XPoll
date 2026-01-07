@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import SockJS from 'sockjs-client'
 import { Client } from '@stomp/stompjs'
+import { getToken } from '../services/AuthService'
 
 export const SESSION_STATES = {
     WAITING: 'WAITING',
@@ -53,8 +54,14 @@ export function SessionProvider({ children }) {
     const handleWebSocketMessage = useCallback((data, code) => {
         switch (data.type) {
             case 'PARTICIPANT_JOINED':
-                //Refreshes session to get updated participant list.
-                fetchSession(code)
+                //Updates local session state immediately.
+                setCurrentSession(prev => {
+                    if (!prev) return null
+                    // Prevent duplicates
+                    if (prev.participants?.some(p => p.id === data.participant.id)) return prev
+                    const newParticipants = [...(prev.participants || []), data.participant]
+                    return { ...prev, participants: newParticipants }
+                })
                 break
             case 'SESSION_STATE_CHANGED':
                 //Updates local session state.
@@ -74,9 +81,13 @@ export function SessionProvider({ children }) {
                 fetchSession(code)
                 break
             case 'PARTICIPANT_LEFT':
-                //forces state update.
-                fetchSession(code).then(session => {
-                    if (session) setCurrentSession(session)
+                //Updates local session state immediately.
+                setCurrentSession(prev => {
+                    if (!prev) return null
+                    return {
+                        ...prev,
+                        participants: prev.participants?.filter(p => p.name !== data.participantName) || []
+                    }
                 })
                 break
         }
@@ -170,14 +181,34 @@ export function SessionProvider({ children }) {
     //Gets current user's session via code (creator only).
     const getMySession = useCallback(async (code) => {
         const normalizedCode = code.toUpperCase()
-        const creatorId = getUserId()
         const session = await fetchSession(normalizedCode)
 
-        if (session && session.creatorId === creatorId) {
-            connectWebSocket(normalizedCode)
+        if (!session) return null
 
+        //Gets authenticated user's ID to compare with session creator
+        let myUserId = null
+        const storedUser = localStorage.getItem('user')
+        if (storedUser) {
+            try {
+                const user = JSON.parse(storedUser)
+                myUserId = String(user?.user?.id || user?.id || '')
+            } catch (e) {
+                console.error('Error parsing user from localStorage', e)
+            }
+        }
+
+        //Compares with session.creatorId (which is now the authenticated user's database ID)
+        if (myUserId && session.creatorId === myUserId) {
+            connectWebSocket(normalizedCode)
             return session
         }
+
+        //Fallback: also check legacy getUserId() for backwards compatibility
+        if (session.creatorId === getUserId()) {
+            connectWebSocket(normalizedCode)
+            return session
+        }
+
         return null
     }, [fetchSession, connectWebSocket])
 
@@ -222,10 +253,14 @@ export function SessionProvider({ children }) {
     //Launches poll and starts timer (creator action).
     const launchPoll = useCallback(async (code) => {
         try {
+            const token = getToken()
             const response = await fetch(`${API_URL}/sessions/${code}/launch`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ creatorId: getUserId() })
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` })
+                },
+                body: JSON.stringify({ creatorId: '' })
             })
 
             if (response.ok) {
@@ -243,10 +278,14 @@ export function SessionProvider({ children }) {
     //Closes poll (creator action).
     const closePoll = useCallback(async (code) => {
         try {
+            const token = getToken()
             const response = await fetch(`${API_URL}/sessions/${code}/close`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ creatorId: getUserId() })
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` })
+                },
+                body: JSON.stringify({ creatorId: '' })
             })
 
             if (response.ok) {
@@ -264,10 +303,14 @@ export function SessionProvider({ children }) {
     //Shows results to participants (creator action).
     const showResults = useCallback(async (code) => {
         try {
+            const token = getToken()
             const response = await fetch(`${API_URL}/sessions/${code}/results`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ creatorId: getUserId() })
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` })
+                },
+                body: JSON.stringify({ creatorId: '' })
             })
 
             if (response.ok) {
@@ -286,10 +329,14 @@ export function SessionProvider({ children }) {
     //Exits without showing results (creator action).
     const exitWithoutResults = useCallback(async (code) => {
         try {
+            const token = getToken()
             const response = await fetch(`${API_URL}/sessions/${code}/exit`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ creatorId: getUserId() })
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` })
+                },
+                body: JSON.stringify({ creatorId: '' })
             })
 
             if (response.ok) {
@@ -308,10 +355,14 @@ export function SessionProvider({ children }) {
     //Deletes session when creator leaves.
     const deleteSession = useCallback(async (code) => {
         try {
+            const token = getToken()
             const response = await fetch(`${API_URL}/sessions/${code}`, {
                 method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ creatorId: getUserId() })
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` })
+                },
+                body: JSON.stringify({ creatorId: '' })
             })
 
             if (response.ok) {

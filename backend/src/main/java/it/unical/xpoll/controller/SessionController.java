@@ -63,10 +63,10 @@ public class SessionController {
     @PostMapping("/create-from-poll")
     public ResponseEntity<?> createSessionFromPoll(@RequestBody CreateFromPollRequest request) {
         try {
-            // Priority: Authenticated User ID > Body creatorId (fallback)
+            // Require authentication - do not fallback to request body creatorId
             String creatorId = userService.getCurrentUser()
                     .map(u -> String.valueOf(u.getId()))
-                    .orElse(request.creatorId());
+                    .orElseThrow(() -> new RuntimeException("Authentication required to start a session"));
 
             Session session = sessionService.createSessionFromPoll(request.pollId(), creatorId);
             return ResponseEntity.ok(sessionToMap(session));
@@ -112,54 +112,89 @@ public class SessionController {
     // Starts poll and timer.
     @PostMapping("/{code}/launch")
     public ResponseEntity<?> launchPoll(@PathVariable String code, @RequestBody CreatorRequest request) {
-        boolean success = sessionService.launchPoll(code, request.creatorId());
+        try {
+            String creatorId = userService.getCurrentUser()
+                    .map(u -> String.valueOf(u.getId()))
+                    .orElseThrow(() -> new RuntimeException("Authentication required"));
+            boolean success = sessionService.launchPoll(code, creatorId);
 
-        if (success) {
-            return ResponseEntity.ok(Map.of("success", true));
+            if (success) {
+                return ResponseEntity.ok(Map.of("success", true));
+            }
+            return ResponseEntity.badRequest().body(Map.of("success", false, "error", "Cannot launch poll"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
-        return ResponseEntity.badRequest().body(Map.of("success", false, "error", "Cannot launch poll"));
     }
 
     @PostMapping("/{code}/close")
     public ResponseEntity<?> closePoll(@PathVariable String code, @RequestBody CreatorRequest request) {
-        boolean success = sessionService.closePoll(code, request.creatorId());
+        try {
+            String creatorId = userService.getCurrentUser()
+                    .map(u -> String.valueOf(u.getId()))
+                    .orElseThrow(() -> new RuntimeException("Authentication required"));
+            boolean success = sessionService.closePoll(code, creatorId);
 
-        if (success) {
-            return ResponseEntity.ok(Map.of("success", true));
+            if (success) {
+                return ResponseEntity.ok(Map.of("success", true));
+            }
+            return ResponseEntity.badRequest().body(Map.of("success", false, "error", "Cannot close poll"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
-        return ResponseEntity.badRequest().body(Map.of("success", false, "error", "Cannot close poll"));
     }
 
     // Shows results to participants.
     @PostMapping("/{code}/results")
     public ResponseEntity<?> showResults(@PathVariable String code, @RequestBody CreatorRequest request) {
-        boolean success = sessionService.showResults(code, request.creatorId());
+        try {
+            String creatorId = userService.getCurrentUser()
+                    .map(u -> String.valueOf(u.getId()))
+                    .orElseThrow(() -> new RuntimeException("Authentication required"));
+            boolean success = sessionService.showResults(code, creatorId);
 
-        if (success) {
-            return ResponseEntity.ok(Map.of("success", true));
+            if (success) {
+                return ResponseEntity.ok(Map.of("success", true));
+            }
+            return ResponseEntity.badRequest().body(Map.of("success", false, "error", "Cannot show results"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
-        return ResponseEntity.badRequest().body(Map.of("success", false, "error", "Cannot show results"));
     }
 
     // Exits without showing results.
     @PostMapping("/{code}/exit")
     public ResponseEntity<?> exitWithoutResults(@PathVariable String code, @RequestBody CreatorRequest request) {
-        boolean success = sessionService.exitWithoutResults(code, request.creatorId());
+        try {
+            String creatorId = userService.getCurrentUser()
+                    .map(u -> String.valueOf(u.getId()))
+                    .orElseThrow(() -> new RuntimeException("Authentication required"));
+            boolean success = sessionService.exitWithoutResults(code, creatorId);
 
-        if (success) {
-            return ResponseEntity.ok(Map.of("success", true));
+            if (success) {
+                return ResponseEntity.ok(Map.of("success", true));
+            }
+            return ResponseEntity.badRequest().body(Map.of("success", false, "error", "Cannot exit"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
-        return ResponseEntity.badRequest().body(Map.of("success", false, "error", "Cannot exit"));
     }
 
     @DeleteMapping("/{code}")
     public ResponseEntity<?> deleteSession(@PathVariable String code, @RequestBody CreatorRequest request) {
-        boolean success = sessionService.deleteSession(code, request.creatorId());
+        try {
+            String creatorId = userService.getCurrentUser()
+                    .map(u -> String.valueOf(u.getId()))
+                    .orElseThrow(() -> new RuntimeException("Authentication required"));
+            boolean success = sessionService.deleteSession(code, creatorId);
 
-        if (success) {
-            return ResponseEntity.ok(Map.of("success", true));
+            if (success) {
+                return ResponseEntity.ok(Map.of("success", true));
+            }
+            return ResponseEntity.badRequest().body(Map.of("success", false, "error", "Cannot delete session"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
-        return ResponseEntity.badRequest().body(Map.of("success", false, "error", "Cannot delete session"));
     }
 
     // submits votes.
@@ -281,10 +316,18 @@ public class SessionController {
         List<Vote> votes = voteRepository.findBySessionIdAndParticipantId(sessionId, participantId);
         int totalScore = 0;
 
+        System.out.println("DEBUG calculateParticipantScore: sessionId=" + sessionId + ", participantId="
+                + participantId + ", votes count=" + votes.size());
+
         for (Vote v : votes) {
             if (v.getOption() == null || v.getQuestion() == null) {
+                System.out.println("DEBUG: Skipping vote with null option or question");
                 continue;
             }
+
+            System.out.println("DEBUG: Vote option: text=" + v.getOption().getText() +
+                    ", value=" + v.getOption().getValue() +
+                    ", isCorrect=" + v.getOption().getIsCorrect());
 
             // Checks if option has explicit value/score.
             if (v.getOption().getValue() != null && v.getOption().getValue() > 0) {
@@ -297,6 +340,7 @@ public class SessionController {
                 totalScore += 1; // 1 point for correct answer.
             }
         }
+        System.out.println("DEBUG: Total score for participant " + participantId + " = " + totalScore);
         return totalScore;
     }
 }

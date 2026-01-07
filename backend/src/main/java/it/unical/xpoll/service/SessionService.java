@@ -20,6 +20,7 @@ public class SessionService {
     private final QuestionRepository questionRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final PollRepository pollRepository;
+    private final UserRepository userRepository;
     private final PollService pollService;
 
     private String generateCode() {
@@ -84,7 +85,9 @@ public class SessionService {
                 .orElseThrow(() -> new RuntimeException("Poll not found"));
 
         if (!poll.getCreatorId().equals(creatorId)) {
-            throw new RuntimeException("Unauthorized");
+            String mismatch = "Poll Creator: " + poll.getCreatorId() + ", Request Creator: " + creatorId;
+            System.out.println("DEBUG: Unauthorized access. " + mismatch);
+            throw new RuntimeException("Unauthorized: " + mismatch);
         }
 
         // Deep copy of poll is NOT needed if we just link it.
@@ -152,8 +155,23 @@ public class SessionService {
         sessionRepository.save(session);
 
         // Broadcasts participant that joined.
-        broadcastSessionUpdate(code, "PARTICIPANT_JOINED", Map.of(
-                "participant", Map.of("name", displayName, "joinedAt", participant.getJoinedAt())));
+        boolean isGoogleUser = false;
+        if (userId != null) {
+            Optional<it.unical.xpoll.model.User> userOpt = userRepository.findById(userId);
+            if (userOpt.isPresent() && userOpt.get().getAccessMode() == it.unical.xpoll.model.AccessMode.GOOGLE) {
+                isGoogleUser = true;
+            }
+        }
+
+        Map<String, Object> participantMap = new HashMap<>();
+        participantMap.put("id", participant.getId());
+        participantMap.put("name", displayName);
+        participantMap.put("joinedAt", participant.getJoinedAt());
+        participantMap.put("score", 0);
+        participantMap.put("completionTimeSeconds", null);
+        participantMap.put("isGoogleUser", isGoogleUser);
+
+        broadcastSessionUpdate(code, "PARTICIPANT_JOINED", Map.of("participant", participantMap));
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
@@ -499,6 +517,7 @@ public class SessionService {
             Map<String, Object> qResult = new HashMap<>();
             qResult.put("id", question.getId());
             qResult.put("text", question.getText());
+            qResult.put("type", question.getType().name()); // Include question type for UI
 
             // Maps options to DTO
             List<Map<String, Object>> optionsDTO = question.getOptions().stream()
@@ -522,11 +541,13 @@ public class SessionService {
                 }
             }
 
-            // Get correct answer indices
+            // Get correct answer indices - check both isCorrect flag AND positive value
             List<Integer> correctIndices = new ArrayList<>();
             for (int i = 0; i < question.getOptions().size(); i++) {
                 Option option = question.getOptions().get(i);
-                if (option.getIsCorrect() != null && option.getIsCorrect()) {
+                boolean isMarkedCorrect = option.getIsCorrect() != null && option.getIsCorrect();
+                boolean hasPositiveValue = option.getValue() != null && option.getValue() > 0;
+                if (isMarkedCorrect || hasPositiveValue) {
                     correctIndices.add(i);
                 }
             }
@@ -534,6 +555,7 @@ public class SessionService {
             // Check if answer is correct: must select ALL correct options and NO incorrect
             // ones
             boolean isCorrect = !selectedIndices.isEmpty() &&
+                    !correctIndices.isEmpty() &&
                     selectedIndices.size() == correctIndices.size() &&
                     selectedIndices.containsAll(correctIndices);
 
