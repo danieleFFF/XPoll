@@ -32,7 +32,7 @@ function UserMenu() {
     }
 
     const handleGoogleLogin = () => {
-        window.location.href = 'http://localhost:8080/oauth2/authorization/google'
+        window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/oauth2/authorization/google`
     }
 
     //Gets user email from various possible locations in the data structure.
@@ -56,7 +56,7 @@ function UserMenu() {
 
     return (
         <div className="relative" ref={menuRef}>
-            { /* Avatar button */ }
+            { /* Avatar button */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
                 className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary-container flex items-center justify-center font-semibold cursor-pointer transition-transform duration-200 hover:scale-105 text-on-primary">
@@ -68,7 +68,7 @@ function UserMenu() {
                 <div className="absolute right-0 mt-2 w-56 bg-surface rounded-lg shadow-xl border border-primary-container/30 py-2 z-50">
                     {user ? (
                         <>
-                            { /*User info header*/ }
+                            { /*User info header*/}
                             <div className="px-4 py-3 border-b border-primary-container/30">
                                 <p className="text-sm text-on-primary font-medium truncate">
                                     {getUserName() || getUserEmail()}
@@ -127,7 +127,7 @@ function UserMenu() {
                         </>
                     ) : (
                         <>
-                            { /* Anonymous user menu */ }
+                            { /* Anonymous user menu */}
                             <Link to="/login" onClick={() => setIsOpen(false)} className="flex items-center gap-3 px-4 py-2 text-on-primary hover:bg-primary/10 transition-colors">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />

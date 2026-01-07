@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8080/api/polls';
+const API_BASE_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/api/polls`;
 
 import { getToken } from './AuthService';
 
@@ -99,7 +99,7 @@ export const getUserPolls = async () => {
     }
 };
 
-const AI_API_URL = 'http://localhost:8080/api/ai';
+const AI_API_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/api/ai`;
 
 export const generatePollFromAI = async (prompt) => {
     try {

@@ -15,11 +15,11 @@ const USER_ID_KEY = 'xpoll_user_id'
 
 //Generates/retrieves unique userId
 const getUserId = () => {
-    let userId = localStorage.getItem(USER_ID_KEY)
+    let userId = sessionStorage.getItem(USER_ID_KEY)
 
     if (!userId) {
         userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9)
-        localStorage.setItem(USER_ID_KEY, userId)
+        sessionStorage.setItem(USER_ID_KEY, userId)
     }
     return userId
 }

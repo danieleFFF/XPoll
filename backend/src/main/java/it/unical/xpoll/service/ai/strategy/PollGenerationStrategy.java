@@ -10,14 +10,15 @@ public class PollGenerationStrategy implements PromptStrategy {
         return String.format(
                 "Create a complete poll about: %s. " +
                         "Include a title, description, and at least 1 question with at least 2 answer options. " +
-                        "Make it engaging and educational.",
+                        "Make it engaging and educational. " +
+                        "If it's a quiz-style question with a correct answer, mark the correct option with points=1.",
                 input);
     }
 
     @Override
     public String getSystemInstruction() {
         return """
-                You are an AI assistant specialized in creating engaging polls.
+                You are an AI assistant specialized in creating engaging polls and quizzes.
                 When asked to generate a poll, provide a JSON structure with the following format:
                 {
                     "title": "Poll title",
@@ -27,14 +28,19 @@ public class PollGenerationStrategy implements PromptStrategy {
                             "text": "Question text",
                             "options": [
                                 {"text": "Option 1", "points": 0},
-                                {"text": "Option 2", "points": 0}
+                                {"text": "Option 2", "points": 1},
+                                {"text": "Option 3", "points": 0}
                             ]
                         }
                     ]
                 }
-                Always include at least 1 question with at least 2 options.
-                Keep content appropriate, educational, and free from offensive language.
-                Respond ONLY with valid JSON, no additional text or markdown code blocks.
+
+                IMPORTANT RULES:
+                - For opinion polls (no right/wrong answer): set all "points" to 0
+                - For quiz questions (with a correct answer): set "points" to 1 for the correct answer, 0 for wrong answers
+                - Always include at least 1 question with at least 2 options
+                - Keep content appropriate, educational, and free from offensive language
+                - Respond ONLY with valid JSON, no additional text or markdown code blocks
                 """;
     }
 

@@ -30,7 +30,7 @@ function Home() {
     if (user && !showLoginOptions) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center px-5 py-10">
-                { /*Hero Section */ }
+                { /*Hero Section */}
                 <div className="text-center mb-12">
                     <h1 className="text-6xl font-bold text-primary mb-4">XPoll</h1>
                     <p className="text-xl text-primary-container max-w-md">
@@ -38,17 +38,17 @@ function Home() {
                     </p>
                 </div>
 
-                {/* 'Enter XPoll' Button */ }
+                {/* 'Enter XPoll' Button */}
                 <div className="bg-surface rounded-card p-8 shadow-[0_4px_6px_rgba(0,0,0,0.2)] w-full max-w-md">
                     <button onClick={() => navigate('/dashboard')}
                         className="block w-full py-4 px-5 rounded-btn font-semibold text-lg text-center text-on-primary bg-primary cursor-pointer transition-all duration-200 hover:bg-[#527d91] hover:-translate-y-0.5 hover:shadow-[0_4px_8px_rgba(98,151,177,0.3)]">
                         Enter XPoll
                     </button>
                     <button onClick={async () => {
-                            const { logout } = await import('../services/AuthService')
-                            await logout()
-                            window.location.reload()
-                        }}
+                        const { logout } = await import('../services/AuthService')
+                        await logout()
+                        window.location.reload()
+                    }}
                         className="block w-full py-3 px-5 mt-3 rounded-btn font-medium text-center text-primary-container border border-primary-container cursor-pointer transition-all duration-200 hover:bg-red-500/10 hover:border-red-500 hover:text-red-400">
                         Logout
                     </button>
@@ -59,13 +59,13 @@ function Home() {
                     </button>
                 </div>
 
-                { /*Join Poll quick access */ }
+                { /*Join Poll quick access */}
                 <div className="mt-8 w-full max-w-md">
                     <p className="text-primary-container mb-3 text-center">Or join with a code</p>
                     <div className="flex gap-3">
                         <input type="text" value={pollCode} onChange={(e) => setPollCode(e.target.value)} onKeyPress={handleKeyPress} placeholder="Enter Code"
                             className="flex-1 py-3 px-4 rounded-btn bg-surface border-2 border-primary-container text-on-primary text-center tracking-widest font-medium outline-none transition-all duration-200 focus:border-primary focus:shadow-[0_0_0_3px_rgba(98,151,177,0.2)]"
-                            maxLength={10}/>
+                            maxLength={10} />
                         <button
                             onClick={handleJoinPoll}
                             className="py-3 px-6 rounded-btn font-medium text-on-primary bg-primary cursor-pointer transition-all duration-200 hover:bg-[#527d91] hover:-translate-y-0.5 hover:shadow-[0_4px_8px_rgba(98,151,177,0.3)]">
@@ -113,7 +113,7 @@ function Home() {
                 </div>
                 {/* Google Login */}
                 <a
-                    href="http://localhost:8080/oauth2/authorization/google"
+                    href={`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/oauth2/authorization/google`}
                     className="w-full py-3 px-5 mb-4 rounded-btn font-medium text-base bg-white text-gray-700 flex items-center justify-center gap-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
                     <svg className="w-5 h-5" viewBox="0 0 24 24">
                         <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -132,7 +132,7 @@ function Home() {
                     <input
                         type="text" value={pollCode} onChange={(e) => setPollCode(e.target.value)} onKeyPress={handleKeyPress} placeholder="Enter Code as Guest"
                         className="flex-1 py-3 px-4 rounded-btn bg-surface border-2 border-primary-container text-on-primary text-center tracking-widest font-medium outline-none transition-all duration-200 focus:border-primary focus:shadow-[0_0_0_3px_rgba(98,151,177,0.2)]"
-                        maxLength={10}/>
+                        maxLength={10} />
                     <button
                         onClick={handleJoinPoll}
                         className="py-3 px-6 rounded-btn font-medium text-on-primary bg-primary cursor-pointer transition-all duration-200 hover:bg-[#527d91] hover:-translate-y-0.5 hover:shadow-[0_4px_8px_rgba(98,151,177,0.3)]">

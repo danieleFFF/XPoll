@@ -61,10 +61,11 @@ function EditPoll() {
                     text: q.text,
                     type: q.type,
                     correctAnswer: q.correctAnswer || 0,
-                    options: q.options.map(opt => ({
+                    options: q.options.map((opt, idx) => ({
                         id: opt.id,
                         text: opt.text,
-                        value: opt.value || 0
+                        value: opt.value || 0,
+                        isCorrect: opt.isCorrect || (q.correctAnswer === idx)
                     }))
                 }))
                 // Sort by order if available, or keep as is
@@ -75,7 +76,7 @@ function EditPoll() {
                     id: Date.now(),
                     text: '',
                     type: 'SINGLE_CHOICE',
-                    options: [{ text: '', value: 0 }, { text: '', value: 0 }],
+                    options: [{ text: '', value: 0, isCorrect: false }, { text: '', value: 0, isCorrect: false }],
                     correctAnswer: 0
                 }])
             }
@@ -95,8 +96,8 @@ function EditPoll() {
                 text: '',
                 type: 'SINGLE_CHOICE',
                 options: [
-                    { text: '', value: 0 },
-                    { text: '', value: 0 }
+                    { text: '', value: 0, isCorrect: false },
+                    { text: '', value: 0, isCorrect: false }
                 ],
                 correctAnswer: 0
             }
@@ -118,7 +119,7 @@ function EditPoll() {
             if (q.id === questionId) {
                 return {
                     ...q,
-                    options: [...q.options, { text: '', value: 0 }]
+                    options: [...q.options, { text: '', value: 0, isCorrect: false }]
                 }
             }
             return q
@@ -394,14 +395,38 @@ function EditPoll() {
                             <div className="space-y-3">
                                 {question.options.map((option, oIndex) => (
                                     <div key={oIndex} className="flex items-center gap-2">
-                                        <input
-                                            type="radio"
-                                            name={`correct-${question.id}`}
-                                            checked={question.correctAnswer === oIndex}
-                                            onChange={() => updateQuestion(question.id, 'correctAnswer', oIndex)}
-                                            className="w-4 h-4 accent-primary flex-shrink-0"
-                                            title="Mark as correct answer"
-                                        />
+                                        {question.type === 'MULTIPLE_CHOICE' ? (
+                                            <input
+                                                type="checkbox"
+                                                checked={option.isCorrect || false}
+                                                onChange={(e) => updateOption(question.id, oIndex, 'isCorrect', e.target.checked)}
+                                                className="w-4 h-4 accent-primary flex-shrink-0"
+                                                title="Mark as correct answer"
+                                            />
+                                        ) : (
+                                            <input
+                                                type="radio"
+                                                name={`correct-${question.id}`}
+                                                checked={option.isCorrect || false}
+                                                onChange={() => {
+                                                    // For single choice, uncheck all others and check this one
+                                                    setQuestions(questions.map(q => {
+                                                        if (q.id === question.id) {
+                                                            return {
+                                                                ...q,
+                                                                options: q.options.map((opt, idx) => ({
+                                                                    ...opt,
+                                                                    isCorrect: idx === oIndex
+                                                                }))
+                                                            }
+                                                        }
+                                                        return q
+                                                    }))
+                                                }}
+                                                className="w-4 h-4 accent-primary flex-shrink-0"
+                                                title="Mark as correct answer"
+                                            />
+                                        )}
 
                                         <input
                                             type="text"
@@ -444,6 +469,10 @@ function EditPoll() {
                             >
                                 + Add Option
                             </button>
+
+                            <p className="text-xs text-primary-container mt-3">
+                                Select the radio button to indicate the correct answer
+                            </p>
                         </div>
                     ))}
 

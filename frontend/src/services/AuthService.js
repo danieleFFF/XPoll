@@ -1,4 +1,5 @@
-const API_BASE_URL = 'http://localhost:8080/api/auth';
+const API_BASE_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/api/auth`;
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 //Manages authentication and user profile
 
@@ -54,6 +55,7 @@ export const register = async (name, email, password) => {
 
 export const logout = async () => {
     localStorage.removeItem('user');
+    sessionStorage.clear();
     try {
         await fetch(`${API_BASE_URL}/logout`, { method: 'POST' });
     } catch (e) {
@@ -75,7 +77,7 @@ const authFetch = async (url, options = {}) => {
     const token = getToken();
     const headers = { 'Content-Type': 'application/json', ...options.headers, };
 
-    if (token){ headers['Authorization'] = `Bearer ${token}`; }
+    if (token) { headers['Authorization'] = `Bearer ${token}`; }
 
     const response = await fetch(url, { ...options, headers });
 
@@ -84,21 +86,21 @@ const authFetch = async (url, options = {}) => {
 
 //Gets full user profile from server
 export const getUserProfile = async () => {
-    const response = await authFetch('http://localhost:8080/api/users/me');
+    const response = await authFetch(`${BASE_URL}/api/users/me`);
 
-    if (!response.ok){ throw new Error('Failed to fetch user profile'); }
+    if (!response.ok) { throw new Error('Failed to fetch user profile'); }
 
     return response.json();
 };
 
 // Update username.
 export const updateUsername = async (username) => {
-    const response = await authFetch('http://localhost:8080/api/users/me/username', {
+    const response = await authFetch(`${BASE_URL}/api/users/me/username`, {
         method: 'PUT',
         body: JSON.stringify({ username }),
     });
 
-    if(!response.ok) {
+    if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Failed to update username');
     }
@@ -108,7 +110,7 @@ export const updateUsername = async (username) => {
     //Updates local storage with new username.
     const currentUser = getCurrentUser();
 
-    if(currentUser){
+    if (currentUser) {
         currentUser.username = updatedUser.username;
         localStorage.setItem('user', JSON.stringify(currentUser));
     }
@@ -118,7 +120,7 @@ export const updateUsername = async (username) => {
 
 //changes password (only for local users).
 export const changePassword = async (currentPassword, newPassword) => {
-    const response = await authFetch('http://localhost:8080/api/users/me/password', {
+    const response = await authFetch(`${BASE_URL}/api/users/me/password`, {
         method: 'PUT',
         body: JSON.stringify({ currentPassword, newPassword }),
     });
@@ -132,16 +134,16 @@ export const changePassword = async (currentPassword, newPassword) => {
 
 //Get user's created polls.
 export const getMyPolls = async () => {
-    const response = await authFetch('http://localhost:8080/api/polls/my-polls');
+    const response = await authFetch(`${BASE_URL}/api/polls/my-polls`);
 
-    if(!response.ok) { throw new Error('Failed to fetch polls');}
+    if (!response.ok) { throw new Error('Failed to fetch polls'); }
 
     return response.json();
 };
 
 //Get user's participation history
 export const getMyParticipations = async () => {
-    const response = await authFetch('http://localhost:8080/api/users/me/participations');
+    const response = await authFetch(`${BASE_URL}/api/users/me/participations`);
 
     if (!response.ok) { throw new Error('Failed to fetch participation history'); }
 

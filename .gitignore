@@ -1,6 +1,7 @@
 .github
 .idea
 .vscode
+.env
 
 #Backend 
 backend/target/

@@ -49,7 +49,7 @@ function MultiTabGuard({ children }) {
     const getEffectiveEmail = useCallback(() => {
         //Only use sessionStorage, the email this tab explicitly logged in with
         const sessionEmail = getSessionEmail()
-        if(sessionEmail) return sessionEmail
+        if (sessionEmail) return sessionEmail
 
         //If no session email but we're on an authenticated page, checks localStorage to see if we should inherit the auth
         if (!isPublicPath()) {
@@ -122,13 +122,13 @@ function MultiTabGuard({ children }) {
             const email = getEffectiveEmail()
 
             //Tracks email changes for cleanup
-            if (currentEmail && currentEmail !== email){
+            if (currentEmail && currentEmail !== email) {
                 clearHeartbeat(currentEmail)
             }
             currentEmail = email
 
             //No email = guest = always allow
-            if(!email) {
+            if (!email) {
                 setIsBlocked(false)
 
                 return
@@ -159,7 +159,7 @@ function MultiTabGuard({ children }) {
 
             const email = getEffectiveEmail()
 
-            if(!email) return
+            if (!email) return
 
             const storageKey = `${STORAGE_KEY_PREFIX}${email}`
 
@@ -174,7 +174,7 @@ function MultiTabGuard({ children }) {
             }
 
             //if user logged out (localStorage.user removed)
-            if(e.key === 'user' && !e.newValue){
+            if (e.key === 'user' && !e.newValue) {
                 setSessionEmail(null)
                 setIsBlocked(false)
             }
