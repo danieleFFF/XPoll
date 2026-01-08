@@ -43,9 +43,9 @@ public class EmailService {
                         <style>
                             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
                             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                            .header { background-color: #6297B1; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+                            .header { background-color: #203452; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
                             .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
-                            .button { display: inline-block; padding: 12px 30px; background-color: #6297B1; color: white; text-decoration: none; border-radius: 50px; margin: 20px 0; }
+                            .button { display: inline-block; padding: 12px 30px; background-color: #203452; color: white; text-decoration: none; border-radius: 50px; margin: 20px 0; }
                             .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
                         </style>
                     </head>

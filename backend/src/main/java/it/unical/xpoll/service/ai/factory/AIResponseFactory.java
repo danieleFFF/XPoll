@@ -50,7 +50,8 @@ public class AIResponseFactory {
                         for (JsonNode optionNode : optionsNode) {
                             String optionText = sanitize(optionNode.path("text").asText());
                             int value = optionNode.path("points").asInt(0);
-                            options.add(new OptionData(optionText, value));
+                            boolean isCorrect = optionNode.path("isCorrect").asBoolean(false);
+                            options.add(new OptionData(optionText, value, isCorrect));
                         }
                     }
 
@@ -92,7 +93,8 @@ public class AIResponseFactory {
                 for (JsonNode optionNode : rootNode) {
                     String optionText = sanitize(optionNode.path("text").asText());
                     int value = optionNode.path("points").asInt(0);
-                    options.add(new OptionData(optionText, value));
+                    boolean isCorrect = optionNode.path("isCorrect").asBoolean(false);
+                    options.add(new OptionData(optionText, value, isCorrect));
                 }
             }
 
@@ -139,6 +141,6 @@ public class AIResponseFactory {
     public record QuestionData(String text, List<OptionData> options) {
     }
 
-    public record OptionData(String text, int value) {
+    public record OptionData(String text, int value, boolean isCorrect) {
     }
 }

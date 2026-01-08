@@ -93,6 +93,9 @@ function Signup() {
                             className="w-full py-3 px-4 rounded-btn bg-primary-container/10 border-2 border-primary-container text-on-primary outline-none transition-all duration-200 focus:border-primary focus:shadow-[0_0_0_3px_rgba(98,151,177,0.2)]"
                             placeholder="••••••••"
                         />
+                        <p className="text-xs text-primary-container mt-1">
+                            At least 6 characters, one letter, and one number
+                        </p>
                     </div>
 
                     <div className="mb-6">

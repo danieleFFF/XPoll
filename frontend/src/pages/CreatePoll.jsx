@@ -114,8 +114,9 @@ function CreatePoll() {
                     correctAnswer: q.correctAnswer || 0,
                     options: q.options ? q.options.map(opt => ({
                         text: opt.text,
-                        value: opt.value || 0
-                    })) : [{ text: '', value: 0 }, { text: '', value: 0 }]
+                        value: opt.value || 0,
+                        isCorrect: opt.isCorrect || false
+                    })) : [{ text: '', value: 0, isCorrect: false }, { text: '', value: 0, isCorrect: false }]
                 }))
                 setQuestions(mappedQuestions)
             }
@@ -139,7 +140,8 @@ function CreatePoll() {
             if (response && response.options && Array.isArray(response.options)) {
                 const mappedOptions = response.options.map(ans => ({
                     text: ans.text,
-                    value: ans.value || 0
+                    value: ans.value || 0,
+                    isCorrect: ans.isCorrect || false
                 }))
 
                 setQuestions(prevQuestions => prevQuestions.map(q => {
@@ -167,6 +169,15 @@ function CreatePoll() {
                 throw new Error('You must be logged in to create a poll')
             }
 
+            // Validate that each question has at least one correct answer
+            for (let i = 0; i < questions.length; i++) {
+                const q = questions[i]
+                const hasCorrectAnswer = q.options.some(opt => opt.isCorrect)
+                if (!hasCorrectAnswer) {
+                    throw new Error(`Question ${i + 1} must have at least one correct answer selected`)
+                }
+            }
+
             // Convert hours:minutes to seconds
             const timeLimit = (hours * 3600) + (minutes * 60)
 
@@ -186,6 +197,7 @@ function CreatePoll() {
                     options: q.options.map((opt, oIndex) => ({
                         text: opt.text,
                         value: hasScore ? opt.value : 0,
+                        isCorrect: opt.isCorrect || false,
                         orderIndex: oIndex
                     }))
                 }))

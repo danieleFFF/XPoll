@@ -120,18 +120,7 @@ function PollDetails() {
                         <h2 className="text-xl font-semibold text-on-primary">Questions</h2>
                         {poll.questions?.map((question, idx) => (
                             <div key={question.id || idx} className="bg-primary/5 p-4 rounded-btn">
-                                <p className="font-medium text-on-primary mb-3">{idx + 1}. {question.text}</p>
-                                <div className="space-y-2 ml-4">
-                                    {question.options?.map((option, optIdx) => (
-                                        <div key={option.id || optIdx} className="flex items-center gap-2">
-                                            <div className={`w-4 h-4 ${question.type === 'MULTIPLE_CHOICE' ? 'rounded-md' : 'rounded-full'} border-2 border-primary`}></div>
-                                            <span className="text-primary-container">{option.text}</span>
-                                            {poll.hasScore && option.value != null && (
-                                                <span className="text-xs text-primary ml-2">({option.value} pts)</span>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
+                                <p className="font-medium text-on-primary">{idx + 1}. {question.text}</p>
                             </div>
                         ))}
                     </div>

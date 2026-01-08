@@ -27,17 +27,17 @@ public class PollGenerationStrategy implements PromptStrategy {
                         {
                             "text": "Question text",
                             "options": [
-                                {"text": "Option 1", "points": 0},
-                                {"text": "Option 2", "points": 1},
-                                {"text": "Option 3", "points": 0}
+                                {"text": "Option 1", "points": 0, "isCorrect": false},
+                                {"text": "Option 2", "points": 1, "isCorrect": true},
+                                {"text": "Option 3", "points": 0, "isCorrect": false}
                             ]
                         }
                     ]
                 }
 
                 IMPORTANT RULES:
-                - For opinion polls (no right/wrong answer): set all "points" to 0
-                - For quiz questions (with a correct answer): set "points" to 1 for the correct answer, 0 for wrong answers
+                - For opinion polls (no right/wrong answer): set all "points" to 0 and "isCorrect" to false
+                - For quiz questions (with a correct answer): set "points" to 1 and "isCorrect" to true for the correct answer
                 - Always include at least 1 question with at least 2 options
                 - Keep content appropriate, educational, and free from offensive language
                 - Respond ONLY with valid JSON, no additional text or markdown code blocks
