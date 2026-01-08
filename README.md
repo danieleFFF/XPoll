@@ -2,7 +2,8 @@
 
 # XPoll, how to start the project:
 
-### We have sent the .env file on teams
+### We have sent the .env file on teams 
+#### (In case the file is called 'env', rename to '.env')
 
 ### 1. With docker-compose:
 
@@ -26,11 +27,17 @@
         npm run dev
 
 
+#### Possible Problems
+
+Other services are using the ports 5173 or 5432 or 8080: turn off the services or change the ports in docker-compose.yml or .env files.
+
+
 ## How to Test
 
 ### Multi-Tab Session Protection
 
 XPoll implements a **multi-tab protection system** to prevent users from participating in the same session from multiple browser tabs simultaneously. This ensures fair participation and prevents cheating.
+
 
 #### Testing as Multiple Users
 
@@ -56,8 +63,4 @@ The multi-tab guard prevents:
 - Unfair advantages in scored polls/quizzes
 
 If you try to open the same session in multiple tabs with the same browser profile, you will see a warning message and only the most recent tab will remain active.
-
-#### Possible Problems
-
-Other services are using the ports 5173 or 8080: turn off the services or change the ports in docker-compose.yml or .env files.
 
