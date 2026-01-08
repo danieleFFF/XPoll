@@ -1,0 +1,620 @@
+package it.unical.xpoll.service;
+
+import it.unical.xpoll.domain.*;
+import it.unical.xpoll.repository.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import java.time.Instant;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class SessionService {
+    private final SessionRepository sessionRepository;
+    private final VoteRepository voteRepository;
+    private final ParticipantRepository participantRepository;
+    private final QuestionRepository questionRepository;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final PollRepository pollRepository;
+    private final UserRepository userRepository;
+    private final PollService pollService;
+
+    private String generateCode() {
+        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        Random random = new Random();
+        StringBuilder code = new StringBuilder();
+
+        do {
+            code.setLength(0);
+
+            for (int i = 0; i < 6; i++) {
+                code.append(chars.charAt(random.nextInt(chars.length())));
+            }
+        } while (sessionRepository.existsByCode(code.toString()));
+
+        return code.toString();
+    }
+
+    // Creates new session with poll data
+    public Session createSession(String creatorId, Long creatorUserId, String title, Integer timeLimit,
+            List<Map<String, Object>> questionsData) {
+
+        Session session = Session.builder()
+                .code(generateCode())
+                .creatorId(creatorId)
+                .creatorUserId(creatorUserId)
+                .createdAt(Instant.now())
+                .state(SessionState.WAITING)
+                .build();
+
+        Poll poll = Poll.builder()
+                .title(title)
+                .timeLimit(timeLimit)
+                .status(PollStatus.PUBLISHED)
+                .build();
+
+        for (Map<String, Object> qData : questionsData) {
+            Question q = Question.builder()
+                    .text((String) qData.get("text"))
+                    .type(Question.QuestionType.valueOf((String) qData.getOrDefault("type", "SINGLE_CHOICE")))
+                    .build();
+
+            List<Map<String, Object>> opts = (List<Map<String, Object>>) qData.get("options");
+            for (Map<String, Object> oData : opts) {
+                Boolean isCorrect = oData.get("isCorrect") != null ? (Boolean) oData.get("isCorrect") : false;
+                Option o = Option.builder()
+                        .question(q)
+                        .text((String) oData.get("text"))
+                        .value((Integer) oData.get("value"))
+                        .isCorrect(isCorrect)
+                        .build();
+                q.addOption(o);
+            }
+            poll.addQuestion(q);
+        }
+        session.setPoll(poll);
+        return sessionRepository.save(session);
+    }
+
+    public Session createSessionFromPoll(Long pollId, String creatorId) {
+        Poll poll = pollRepository.findById(pollId)
+                .orElseThrow(() -> new RuntimeException("Poll not found"));
+
+        if (!poll.getCreatorId().equals(creatorId)) {
+            String mismatch = "Poll Creator: " + poll.getCreatorId() + ", Request Creator: " + creatorId;
+            System.out.println("DEBUG: Unauthorized access. " + mismatch);
+            throw new RuntimeException("Unauthorized: " + mismatch);
+        }
+
+        //parses creatorUserId from creatorId string
+        Long creatorUserId = null;
+        try {
+            creatorUserId = Long.parseLong(creatorId);
+        } catch (NumberFormatException e) {
+            //guest user - no userId
+        }
+
+        Session session = Session.builder()
+                .code(generateCode())
+                .creatorId(creatorId)
+                .creatorUserId(creatorUserId) // for history tracking
+                .createdAt(Instant.now())
+                .state(SessionState.WAITING)
+                .poll(poll)
+                .build();
+
+        //Saves session first to get an id
+        session = sessionRepository.save(session);
+
+        //Adds presenter as a participant for history tracking
+        if (creatorUserId != null) {
+            Participant presenterParticipant = Participant.builder()
+                    .name("Presenter")
+                    .userId(creatorUserId)
+                    .joinedAt(Instant.now())
+                    .session(session)
+                    .build();
+            session.addParticipant(presenterParticipant);
+            session = sessionRepository.save(session);
+        }
+        return session;
+    }
+
+    // Gets session by code
+    @Transactional(readOnly = true)
+    public Optional<Session> getSession(String code) {
+        return sessionRepository.findByCode(code.toUpperCase());
+    }
+
+    // Joins session as participant.
+    public Map<String, Object> joinSession(String code, String displayName, Long userId) {
+        System.out.println("DEBUG joinSession: code=" + code + ", displayName=" + displayName + ", userId=" + userId);
+        Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
+
+        if (opt.isEmpty()) {
+            return Map.of("success", false, "error", "Session not found");
+        }
+
+        Session session = opt.get();
+
+        if (session.getState() == SessionState.CLOSED) {
+            return Map.of("success", false, "error", "Session is closed");
+        }
+
+        // Check for duplicate name in this session
+        boolean nameExists = session.getParticipants().stream()
+                .anyMatch(p -> p.getName().equalsIgnoreCase(displayName));
+
+        if (nameExists)
+            return Map.of("success", false, "error", "Display name already taken", "code", "NAME_TAKEN");
+
+        // Create new participant linked to session
+        Participant participant = Participant.builder()
+                .name(displayName)
+                .session(session)
+                .sessionToken(UUID.randomUUID().toString())
+                .joinedAt(Instant.now())
+                .isConnected(true)
+                .userId(userId) // Links authenticated user for history tracking.
+                .build();
+
+        participantRepository.save(participant);
+
+        // Adds participant to session list
+        session.addParticipant(participant);
+        sessionRepository.save(session);
+
+        // Broadcasts participant that joined.
+        boolean isGoogleUser = false;
+        if (userId != null) {
+            Optional<it.unical.xpoll.model.User> userOpt = userRepository.findById(userId);
+            if (userOpt.isPresent() && userOpt.get().getAccessMode() == it.unical.xpoll.model.AccessMode.GOOGLE) {
+                isGoogleUser = true;
+            }
+        }
+
+        Map<String, Object> participantMap = new HashMap<>();
+        participantMap.put("id", participant.getId());
+        participantMap.put("name", displayName);
+        participantMap.put("joinedAt", participant.getJoinedAt());
+        participantMap.put("score", 0);
+        participantMap.put("completionTimeSeconds", null);
+        participantMap.put("isGoogleUser", isGoogleUser);
+
+        broadcastSessionUpdate(code, "PARTICIPANT_JOINED", Map.of("participant", participantMap));
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", true);
+        result.put("sessionCode", code);
+        result.put("sessionToken", participant.getSessionToken());
+        Map<String, Object> participantData = new HashMap<>();
+        participantData.put("name", participant.getName());
+        participantData.put("joinedAt", participant.getJoinedAt());
+        participantData.put("id", participant.getId());
+        result.put("participant", participantData);
+
+        return result;
+    }
+
+    // removes participant from session .
+    public boolean leaveSession(String code, String participantName) {
+        Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
+
+        if (opt.isEmpty()) {
+            return false;
+        }
+
+        Session session = opt.get();
+
+        // Finds and removes participant by name
+        Optional<Participant> participantOpt = session.getParticipants().stream()
+                .filter(p -> p.getName().equalsIgnoreCase(participantName))
+                .findFirst();
+
+        if (participantOpt.isEmpty()) {
+            return false;
+        }
+
+        Participant participant = participantOpt.get();
+        session.getParticipants().remove(participant);
+        participantRepository.delete(participant);
+        sessionRepository.save(session);
+
+        // Broadcasts participant left.
+        broadcastSessionUpdate(code, "PARTICIPANT_LEFT", Map.of(
+                "participantName", participantName));
+
+        return true;
+    }
+
+    // Launches poll and starts timer
+    public boolean launchPoll(String code, String creatorId) {
+        Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
+
+        if (opt.isEmpty())
+            return false;
+
+        Session session = opt.get();
+
+        if (!session.getCreatorId().equals(creatorId))
+            return false;
+
+        session.setState(SessionState.OPEN);
+        session.setTimerStartedAt(Instant.now());
+        sessionRepository.save(session);
+
+        broadcastSessionUpdate(code, "SESSION_STATE_CHANGED", Map.of(
+                "state", SessionState.OPEN.name(),
+                "timerStartedAt", session.getTimerStartedAt()));
+
+        return true;
+    }
+
+    // Closes poll.
+    public boolean closePoll(String code, String creatorId) {
+        Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
+
+        if (opt.isEmpty())
+            return false;
+
+        Session session = opt.get();
+
+        if (!session.getCreatorId().equals(creatorId))
+            return false;
+
+        session.setState(SessionState.CLOSED);
+        session.setEndedAt(Instant.now());
+        sessionRepository.save(session);
+        broadcastSessionUpdate(code, "SESSION_STATE_CHANGED", Map.of("state", SessionState.CLOSED.name()));
+
+        return true;
+    }
+
+    // Shows results to participants
+    public boolean showResults(String code, String creatorId) {
+        Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
+
+        if (opt.isEmpty())
+            return false;
+
+        Session session = opt.get();
+
+        if (!session.getCreatorId().equals(creatorId))
+            return false;
+
+        session.setResultsShown(true);
+        session.setState(SessionState.CLOSED);
+        session.setEndedAt(Instant.now());
+        sessionRepository.save(session);
+        broadcastSessionUpdate(code, "RESULTS_SHOWN", Map.of("resultsShown", true));
+
+        return true;
+    }
+
+    // Exits without showing results.
+    public boolean exitWithoutResults(String code, String creatorId) {
+        Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
+
+        if (opt.isEmpty())
+            return false;
+
+        Session session = opt.get();
+
+        if (!session.getCreatorId().equals(creatorId))
+            return false;
+
+        session.setExitedWithoutResults(true);
+        session.setState(SessionState.CLOSED);
+        session.setEndedAt(Instant.now());
+        sessionRepository.save(session);
+        broadcastSessionUpdate(code, "SESSION_CLOSED", Map.of("exitedWithoutResults", true));
+
+        return true;
+    }
+
+    // Deletes session.
+    public boolean deleteSession(String code, String creatorId) {
+        Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
+
+        if (opt.isEmpty())
+            return false;
+
+        Session session = opt.get();
+
+        if (!session.getCreatorId().equals(creatorId))
+            return false;
+
+        sessionRepository.delete(session);
+        broadcastSessionUpdate(code, "SESSION_DELETED", Map.of());
+
+        return true;
+    }
+
+    // Submits participant's votes
+    public boolean submitVotes(String code, String participantName, Map<String, Object> answers) {
+        Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
+
+        if (opt.isEmpty()) {
+            return false;
+        }
+
+        Session session = opt.get();
+
+        if (session.getState() == SessionState.WAITING) {
+            return false;
+        }
+
+        // Finds participant by name in this session
+        Optional<Participant> participantOpt = session.getParticipants().stream()
+                .filter(p -> p.getName().equalsIgnoreCase(participantName))
+                .findFirst();
+
+        if (participantOpt.isEmpty()) {
+            return false;
+        }
+
+        Participant participant = participantOpt.get();
+
+        // Gets existing votes for this participant
+        List<Vote> existingVotes = voteRepository.findBySessionIdAndParticipantId(session.getId(), participant.getId());
+        Set<Long> answeredQuestionIds = existingVotes.stream()
+                .map(v -> v.getQuestion().getId())
+                .collect(Collectors.toSet());
+
+        try {
+            List<Vote> votesToSave = new ArrayList<>();
+            for (Map.Entry<String, Object> entry : answers.entrySet()) {
+                Long questionId = Long.valueOf(entry.getKey());
+                Object answerValue = entry.getValue();
+
+                // Skips if already answered
+                if (answeredQuestionIds.contains(questionId)) {
+                    continue;
+                }
+
+                Question question = questionRepository.findById(questionId).orElse(null);
+                if (question == null || !question.getPoll().getId().equals(session.getPoll().getId())) {
+                    continue;
+                }
+
+                // Handle both single selection (Integer) and multiple selection (List<Integer>)
+                List<Integer> optionIndices = new ArrayList<>();
+                if (answerValue instanceof Integer) {
+                    optionIndices.add((Integer) answerValue);
+                } else if (answerValue instanceof List) {
+                    optionIndices.addAll((List<Integer>) answerValue);
+                }
+
+                for (Integer optionIndex : optionIndices) {
+                    if (optionIndex >= 0 && optionIndex < question.getOptions().size()) {
+                        Option selectedOption = question.getOptions().get(optionIndex);
+
+                        Vote vote = Vote.builder()
+                                .session(session)
+                                .participant(participant)
+                                .question(question)
+                                .option(selectedOption)
+                                .submittedAt(Instant.now())
+                                .build();
+                        votesToSave.add(vote);
+                    }
+                }
+            }
+
+            if (!votesToSave.isEmpty()) {
+                voteRepository.saveAll(votesToSave);
+
+                // Calculates and saves completion time (only on first submission)
+                if (participant.getSubmittedAt() == null && session.getTimerStartedAt() != null) {
+                    Instant now = Instant.now();
+                    participant.setSubmittedAt(now);
+                    int completionSeconds = (int) (now.getEpochSecond() - session.getTimerStartedAt().getEpochSecond());
+                    participant.setCompletionTimeSeconds(completionSeconds);
+                    participantRepository.save(participant);
+                }
+            }
+
+            // Broadcasts update.
+            broadcastSessionUpdate(code, "VOTE_SUBMITTED", Map.of("status", "ok"));
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    // Gets remaining time
+    @Transactional(readOnly = true)
+    public int getRemainingTime(String code) {
+        Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
+
+        if (opt.isEmpty())
+            return 0;
+
+        Session session = opt.get();
+
+        if (session.getTimerStartedAt() == null) {
+            return session.getPoll().getTimeLimit() != null ? session.getPoll().getTimeLimit() : 0;
+        }
+
+        long elapsed = Instant.now().getEpochSecond() - session.getTimerStartedAt().getEpochSecond();
+        int timeLimit = session.getPoll().getTimeLimit() != null ? session.getPoll().getTimeLimit() : 0;
+        return Math.max(0, timeLimit - (int) elapsed);
+    }
+
+    // Calculates aggregate results .
+    @Transactional(readOnly = true)
+    public Map<String, Object> getResults(String code) {
+        Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
+
+        if (opt.isEmpty())
+            return null;
+
+        Session session = opt.get();
+        Poll poll = session.getPoll();
+        List<Vote> allVotes = voteRepository.findBySessionId(session.getId());
+        List<Map<String, Object>> questionsResults = new ArrayList<>();
+
+        for (Question question : poll.getQuestions()) {
+            List<Map<String, Object>> optionResults = new ArrayList<>();
+            // Filters votes for this question
+            List<Vote> questionVotes = allVotes.stream()
+                    .filter(v -> v.getQuestion().getId().equals(question.getId()))
+                    .toList();
+
+            for (int i = 0; i < question.getOptions().size(); i++) {
+                Option option = question.getOptions().get(i);
+
+                long voteCount = questionVotes.stream()
+                        .filter(v -> v.getOption().getId().equals(option.getId()))
+                        .count();
+
+                boolean isCorrect = option.getIsCorrect() != null && option.getIsCorrect();
+
+                optionResults.add(Map.of(
+                        "id", option.getId(),
+                        "text", option.getText(),
+                        "votes", voteCount,
+                        "isCorrect", isCorrect));
+            }
+            Map<String, Object> questionMap = new HashMap<>();
+            questionMap.put("id", question.getId());
+            questionMap.put("text", question.getText());
+            questionMap.put("options", optionResults);
+            questionsResults.add(questionMap);
+        }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("pollTitle", poll.getTitle());
+        // counts distinct voters
+        response.put("totalParticipants", allVotes.stream().map(v -> v.getParticipant().getId()).distinct().count());
+        response.put("questions", questionsResults);
+
+        return response;
+    }
+
+    // Gets personalized results
+    @Transactional(readOnly = true)
+    public Map<String, Object> getParticipantResults(String code, String participantName) {
+        Optional<Session> opt = sessionRepository.findByCode(code.toUpperCase());
+
+        if (opt.isEmpty())
+            return null;
+
+        Session session = opt.get();
+        Poll poll = session.getPoll();
+
+        // Finds participant
+        Optional<Participant> participantOpt = session.getParticipants().stream()
+                .filter(p -> p.getName().equalsIgnoreCase(participantName))
+                .findFirst();
+
+        if (participantOpt.isEmpty()) {
+            return null;
+        }
+        Participant participant = participantOpt.get();
+
+        // Gets participant's votes
+        List<Vote> myVotes = voteRepository.findBySessionIdAndParticipantId(session.getId(), participant.getId());
+        int correctCount = 0;
+        List<Map<String, Object>> questionsResults = new ArrayList<>();
+
+        for (Question question : poll.getQuestions()) {
+            // Get all votes for this question from this participant
+            List<Vote> questionVotes = myVotes.stream()
+                    .filter(v -> v.getQuestion().getId().equals(question.getId()))
+                    .toList();
+
+            Map<String, Object> qResult = new HashMap<>();
+            qResult.put("id", question.getId());
+            qResult.put("text", question.getText());
+            qResult.put("type", question.getType().name()); // Include question type for UI
+
+            // Maps options to DTO
+            List<Map<String, Object>> optionsDTO = question.getOptions().stream()
+                    .map(o -> {
+                        Map<String, Object> map = new HashMap<>();
+                        map.put("id", o.getId());
+                        map.put("text", o.getText());
+                        return map;
+                    })
+                    .collect(Collectors.toList());
+            qResult.put("options", optionsDTO);
+
+            // Get selected option indices
+            List<Integer> selectedIndices = new ArrayList<>();
+            for (Vote vote : questionVotes) {
+                for (int i = 0; i < question.getOptions().size(); i++) {
+                    if (question.getOptions().get(i).getId().equals(vote.getOption().getId())) {
+                        selectedIndices.add(i);
+                        break;
+                    }
+                }
+            }
+
+            // Get correct answer indices - check both isCorrect flag AND positive value
+            List<Integer> correctIndices = new ArrayList<>();
+            for (int i = 0; i < question.getOptions().size(); i++) {
+                Option option = question.getOptions().get(i);
+                boolean isMarkedCorrect = option.getIsCorrect() != null && option.getIsCorrect();
+                boolean hasPositiveValue = option.getValue() != null && option.getValue() > 0;
+                if (isMarkedCorrect || hasPositiveValue) {
+                    correctIndices.add(i);
+                }
+            }
+
+            // Check if answer is correct: must select ALL correct options and NO incorrect
+            // ones
+            boolean isCorrect = !selectedIndices.isEmpty() &&
+                    !correctIndices.isEmpty() &&
+                    selectedIndices.size() == correctIndices.size() &&
+                    selectedIndices.containsAll(correctIndices);
+
+            qResult.put("isCorrect", isCorrect);
+            qResult.put("selectedIndices", selectedIndices); // Changed to list
+            qResult.put("correctIndices", correctIndices); // Changed to list
+
+            // For backward compatibility with single selection UI
+            qResult.put("selectedIndex", selectedIndices.isEmpty() ? -1 : selectedIndices.get(0));
+            qResult.put("correctAnswerIndex", correctIndices.isEmpty() ? -1 : correctIndices.get(0));
+
+            if (isCorrect)
+                correctCount++;
+
+            questionsResults.add(qResult);
+        }
+
+        // Calculate total score from selected options (including negative penalties)
+        int totalScore = 0;
+        for (Vote v : myVotes) {
+            if (v.getOption() != null) {
+                if (v.getOption().getValue() != null && v.getOption().getValue() != 0) {
+                    //adds the value (+ or -)
+                    totalScore += v.getOption().getValue();
+                } else if (v.getOption().getIsCorrect() != null && v.getOption().getIsCorrect()) {
+                    totalScore += 1;
+                }
+            }
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("pollTitle", poll.getTitle());
+        result.put("correctCount", correctCount);
+        result.put("totalQuestions", poll.getQuestions().size());
+        result.put("score", totalScore);
+        result.put("questions", questionsResults);
+
+        return result;
+    }
+
+    // Broadcasts session update to all connected participants
+    private void broadcastSessionUpdate(String code, String type, Map<String, Object> payload) {
+        Map<String, Object> message = new HashMap<>();
+        message.put("type", type);
+        message.putAll(payload);
+        messagingTemplate.convertAndSend("/topic/session/" + code.toUpperCase(), (Object) message);
+    }
+}

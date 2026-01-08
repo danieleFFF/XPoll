@@ -1,0 +1,73 @@
+services:
+
+  #PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: xpoll-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-xpoll}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-xpoll}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  #Spring Boot Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: xpoll-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      #Gemini Configuration
+      GEMINI_ENABLED: ${GEMINI_ENABLED}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      #Database
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-xpoll}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      #JWT
+      APP_JWT_SECRET: ${JWT_SECRET:-xpoll-jwt-secret-key-minimum-32-characters-long-for-security}
+      APP_JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      #Google OAuth2
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      #Email Configuration
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      SPRING_MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      SPRING_MAIL_PORT: ${MAIL_PORT:-587}
+      #Frontend URL (for CORS and OAuth redirect)
+      APP_FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      #Disable Docker Compose auto-startup 
+      SPRING_DOCKER_COMPOSE_ENABLED: false
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  #React Frontend (Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+    container_name: xpoll-frontend
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
