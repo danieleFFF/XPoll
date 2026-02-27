@@ -1,27 +1,46 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/Ix0BRiuI)
-
 # XPoll, how to start the project:
 
-### We have sent the .env file on teams 
-#### (In case the file is called 'env', rename to '.env')
+### 0. Create your .env file:
+You'll need these 5 steps in order to run the project correctly:
+1) Create a project on Google Cloud;
+2) Enable Google Auth Platform from Google Cloud;
+3) Create your Gemini API Key from aistudio.google.com;
+4) Create a new Google Account to manage this project . From Settings, go to "password for the app";
+5) Create in the root folder a file called *.env* (specify your credentials after every "="):
+
+    *GOOGLE_CLIENT_ID=*
+   
+    *GOOGLE_CLIENT_SECRET=*
+   
+    *GEMINI_API_KEY=*
+   
+    *GEMINI_ENABLED=true*
+
+    *MAIL_USERNAME=*
+
+    *MAIL_PASSWORD=*
+
+    *FRONTEND_URL=http://localhost*
+
+    *VITE_API_URL=http://localhost:8080*
 
 ### 1. With docker-compose:
 
-    ⚠️ put .env file in the root directory of the project
+    ⚠️ Put your .env file in the root directory of the project and then run:
 
     docker-compose up -d --build
 
 
 ### 2. Without docker:
 
-    ⚠️ (Spring Boot does not take .env file automatically, needs to be set manually in environment variables of the project)
+    ⚠️ Spring Boot doesn't take the .env file automatically: it needs to be set manually in the environment variables section of the project.
 
     Backend + Database: 
-    1. open the folder backend in intellij idea 
-    2. put the variables in the environment variables of the project (.env)
-    3. run the application
+    1. Open the folder backend in IntelliJ Idea; 
+    2. Put the variables in the environment variables of the project (.env);
+    3. Run the application.
 
-    Frontend:
+    From the frontend folder, run these commands:
         cd frontend
         npm install
         npm run dev
