@@ -1,4 +1,8 @@
-# XPoll, how to start the project:
+
+https://github.com/user-attachments/assets/70814ff4-ff2e-46a8-b488-05039f969b02
+
+
+# How to run the project:
 
 ### 0. Create your .env file:
 You'll need these 5 steps in order to run the project correctly:
